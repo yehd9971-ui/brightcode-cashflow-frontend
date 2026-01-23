@@ -70,10 +70,15 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}:latest
 
+            # Create project directory if it doesn't exist
+            mkdir -p /opt/brightfrontnew
+
             # Navigate to project directory
             cd /opt/brightfrontnew
 
-            # Stop existing container if running
+            # Force stop and remove existing container
+            docker stop cashflow-frontend || true
+            docker rm cashflow-frontend || true
             docker compose down || true
 
             # Update docker-compose to use the new image
