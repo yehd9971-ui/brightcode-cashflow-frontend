@@ -1,0 +1,113 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # Pull the latest image
+            docker pull ghcr.io/${{ github.repository }}:latest
+
+            # Navigate to project directory
+            cd /opt/brightfrontnew
+
+            # Stop existing container if running
+            docker compose down || true
+
+            # Update docker-compose to use the new image
+            cat > docker-compose.yml << 'EOF'
+            version: '3.8'
+
+            services:
+              frontend:
+                image: ghcr.io/${{ github.repository }}:latest
+                container_name: cashflow-frontend
+                restart: unless-stopped
+                ports:
+                  - "3001:3001"
+                environment:
+                  - NODE_ENV=production
+                  - NEXT_PUBLIC_API_BASE_URL=https://api.drafif.cloud
+                  - VIRTUAL_HOST=drafif.cloud
+                  - LETSENCRYPT_HOST=drafif.cloud
+                networks:
+                  - proxy
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 40s
+
+            networks:
+              proxy:
+                external: true
+                name: nginx-proxy_proxy
+            EOF
+
+            # Start the new container
+            docker compose up -d
+
+            # Clean up old images
+            docker image prune -f
+
+            echo "Deployment completed successfully!"
