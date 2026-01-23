@@ -1,0 +1,138 @@
+{
+  "app": {
+    "title": "لوحة تحكم التدفق النقدي - برايت كود",
+    "description": "نظام إدارة التدفق النقدي"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "transactions": "المعاملات",
+    "approvals": "الموافقات",
+    "reports": "التقارير",
+    "users": "المستخدمون",
+    "audit": "سجلات التدقيق"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "signIn": "دخول",
+    "sessionExpired": "انتهت الجلسة. الرجاء تسجيل الدخول مرة أخرى.",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "accountDeactivated": "تم تعطيل حسابك. تواصل مع المسؤول.",
+    "rateLimited": "محاولات كثيرة. انتظر {seconds} ثانية."
+  },
+  "common": {
+    "loading": "جاري التحميل...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "create": "إنشاء",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "view": "عرض",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "download": "تحميل",
+    "upload": "رفع",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "all": "الكل",
+    "none": "لا شيء",
+    "yes": "نعم",
+    "no": "لا",
+    "actions": "الإجراءات",
+    "status": "الحالة",
+    "date": "التاريخ",
+    "amount": "المبلغ",
+    "description": "الوصف",
+    "type": "النوع",
+    "category": "الفئة"
+  },
+  "status": {
+    "pending": "قيد الانتظار",
+    "approved": "موافق عليه",
+    "rejected": "مرفوض",
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "type": {
+    "in": "وارد (دخل)",
+    "out": "صادر (مصروف)"
+  },
+  "role": {
+    "admin": "مسؤول",
+    "sales": "مبيعات"
+  },
+  "transactions": {
+    "title": "المعاملات",
+    "new": "معاملة جديدة",
+    "detail": "تفاصيل المعاملة",
+    "noTransactions": "لا توجد معاملات",
+    "createFirst": "أنشئ أول معاملة للبدء",
+    "uploadReceipt": "رفع إيصال",
+    "attachments": "المرفقات",
+    "approve": "موافقة",
+    "reject": "رفض",
+    "rejectionReason": "سبب الرفض",
+    "approvedBy": "موافق عليه بواسطة",
+    "createdBy": "أنشئ بواسطة"
+  },
+  "approvals": {
+    "title": "الموافقات المعلقة",
+    "noApprovals": "لا توجد موافقات معلقة",
+    "allReviewed": "تمت مراجعة جميع المعاملات"
+  },
+  "reports": {
+    "title": "التقارير المالية",
+    "balance": "الرصيد",
+    "summary": "ملخص",
+    "expenses": "المصروفات حسب الفئة",
+    "totalIncome": "إجمالي الدخل",
+    "totalExpenses": "إجمالي المصروفات",
+    "netBalance": "صافي الرصيد",
+    "exportExcel": "تصدير Excel",
+    "exportCsv": "تصدير CSV"
+  },
+  "users": {
+    "title": "إدارة المستخدمين",
+    "create": "إنشاء مستخدم",
+    "edit": "تعديل المستخدم",
+    "activate": "تفعيل",
+    "deactivate": "تعطيل",
+    "deactivateWarning": "سيتم تسجيل خروج هذا المستخدم ولن يتمكن من الدخول."
+  },
+  "audit": {
+    "title": "سجلات التدقيق",
+    "noLogs": "لا توجد سجلات"
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "invalidEmail": "أدخل بريد إلكتروني صالح",
+    "minLength": "يجب أن يكون {min} أحرف على الأقل",
+    "maxLength": "لا يمكن أن يتجاوز {max} حرف",
+    "minAmount": "المبلغ يجب أن يكون {min} على الأقل",
+    "maxDecimals": "لا يمكن أن يتجاوز {max} أرقام عشرية"
+  },
+  "errors": {
+    "generic": "حدث خطأ. حاول مرة أخرى.",
+    "notFound": "غير موجود",
+    "forbidden": "ليس لديك صلاحية للوصول",
+    "networkError": "خطأ في الشبكة. تحقق من الاتصال.",
+    "dateRangeInvalid": "يجب أن يكون تاريخ الانتهاء بعد أو يساوي تاريخ البداية",
+    "offline": "أنت غير متصل بالإنترنت حالياً. قد لا تتوفر بعض الميزات.",
+    "connectionRestored": "تم استعادة الاتصال"
+  },
+  "success": {
+    "created": "تم الإنشاء بنجاح",
+    "updated": "تم التحديث بنجاح",
+    "deleted": "تم الحذف بنجاح",
+    "saved": "تم الحفظ بنجاح"
+  },
+  "currency": "ج.م",
+  "pagination": {
+    "showing": "عرض {start}-{end} من {total}"
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "app": {
+    "title": "Bright Code Cashflow Dashboard",
+    "description": "Cashflow management system"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "approvals": "Approvals",
+    "reports": "Reports",
+    "users": "Users",
+    "audit": "Audit Logs"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign In",
+    "sessionExpired": "Session expired. Please login again.",
+    "invalidCredentials": "Invalid email or password",
+    "accountDeactivated": "Your account has been deactivated. Contact administrator.",
+    "rateLimited": "Too many attempts. Please wait {seconds} seconds."
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "view": "View",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "download": "Download",
+    "upload": "Upload",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "actions": "Actions",
+    "status": "Status",
+    "date": "Date",
+    "amount": "Amount",
+    "description": "Description",
+    "type": "Type",
+    "category": "Category"
+  },
+  "status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "type": {
+    "in": "IN (Income)",
+    "out": "OUT (Expense)"
+  },
+  "role": {
+    "admin": "Administrator",
+    "sales": "Sales"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "new": "New Transaction",
+    "detail": "Transaction Details",
+    "noTransactions": "No transactions found",
+    "createFirst": "Create your first transaction to get started",
+    "uploadReceipt": "Upload Receipt",
+    "attachments": "Attachments",
+    "approve": "Approve",
+    "reject": "Reject",
+    "rejectionReason": "Rejection Reason",
+    "approvedBy": "Approved By",
+    "createdBy": "Created By"
+  },
+  "approvals": {
+    "title": "Pending Approvals",
+    "noApprovals": "No pending approvals",
+    "allReviewed": "All transactions have been reviewed"
+  },
+  "reports": {
+    "title": "Financial Reports",
+    "balance": "Balance",
+    "summary": "Summary",
+    "expenses": "Expenses by Category",
+    "totalIncome": "Total Income",
+    "totalExpenses": "Total Expenses",
+    "netBalance": "Net Balance",
+    "exportExcel": "Export Excel",
+    "exportCsv": "Export CSV"
+  },
+  "users": {
+    "title": "Users Management",
+    "create": "Create User",
+    "edit": "Edit User",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "deactivateWarning": "This user will be logged out and unable to login."
+  },
+  "audit": {
+    "title": "Audit Logs",
+    "noLogs": "No audit logs found"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email",
+    "minLength": "Must be at least {min} characters",
+    "maxLength": "Cannot exceed {max} characters",
+    "minAmount": "Amount must be at least {min}",
+    "maxDecimals": "Cannot have more than {max} decimal places"
+  },
+  "errors": {
+    "generic": "An error occurred. Please try again.",
+    "notFound": "Not found",
+    "forbidden": "You don't have permission to access this",
+    "networkError": "Network error. Please check your connection.",
+    "dateRangeInvalid": "End date must be after or equal to start date",
+    "offline": "You are currently offline. Some features may be unavailable.",
+    "connectionRestored": "Connection restored"
+  },
+  "success": {
+    "created": "Created successfully",
+    "updated": "Updated successfully",
+    "deleted": "Deleted successfully",
+    "saved": "Saved successfully"
+  },
+  "currency": "EGP",
+  "pagination": {
+    "showing": "Showing {start}-{end} of {total}"
+  }
+}
