@@ -8,11 +8,14 @@ import { Plus, Search, Eye, Download, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTransactions, exportTransactionsCSV, exportTransactionsExcel } from '@/lib/services/transactions';
+import { getUsers } from '@/lib/services/users';
 import {
   TransactionType,
   TransactionStatus,
   TransactionCategory,
   TransactionQueryDto,
+  Role,
+  UserResponseDto,
 } from '@/types/api';
 import { formatAmount, formatDateShort, truncateText } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
@@ -57,9 +60,51 @@ export default function TransactionsPage() {
     status: (searchParams.get('status') as TransactionStatus) || undefined,
     category: (searchParams.get('category') as TransactionCategory) || undefined,
     search: searchParams.get('search') || '',
+    createdById: searchParams.get('createdById') || undefined,
+    createdByRole: (searchParams.get('createdByRole') as Role) || undefined,
+  });
+
+  const [selectedMember, setSelectedMember] = useState(() => {
+    const createdById = searchParams.get('createdById');
+    const createdByRole = searchParams.get('createdByRole');
+    if (createdByRole) return `role:${createdByRole}`;
+    if (createdById) return createdById;
+    return '';
   });
 
   const [isExporting, setIsExporting] = useState<'csv' | 'excel' | null>(null);
+
+  // Fetch all users for member dropdown (admin only)
+  const { data: usersData } = useQuery({
+    queryKey: ['users', 'members-dropdown'],
+    queryFn: () => getUsers({ limit: 100 }),
+    enabled: isAdmin,
+  });
+
+  const allUsers = usersData?.data || [];
+  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES);
+  const adminUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.ADMIN);
+
+  const memberTopOptions = [
+    { value: '', label: 'All Members' },
+  ];
+
+  const memberGroups = [
+    {
+      label: 'Sales Members',
+      options: [
+        { value: 'role:SALES', label: 'All Sales Members' },
+        ...salesUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+      ],
+    },
+    {
+      label: 'Admins',
+      options: [
+        { value: 'role:ADMIN', label: 'All Admins' },
+        ...adminUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+      ],
+    },
+  ];
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['transactions', filters],
@@ -80,6 +125,24 @@ export default function TransactionsPage() {
     updateUrl(newFilters);
   };
 
+  const handleMemberChange = (value: string) => {
+    setSelectedMember(value);
+    const isRoleFilter = value.startsWith('role:');
+    const newFilters: TransactionQueryDto = {
+      ...filters,
+      createdById: undefined,
+      createdByRole: undefined,
+      page: 1,
+    };
+    if (isRoleFilter) {
+      newFilters.createdByRole = value.split(':')[1] as Role;
+    } else if (value) {
+      newFilters.createdById = value;
+    }
+    setFilters(newFilters);
+    updateUrl(newFilters);
+  };
+
   const handlePageChange = (page: number) => {
     const newFilters = { ...filters, page };
     setFilters(newFilters);
@@ -93,6 +156,8 @@ export default function TransactionsPage() {
     if (newFilters.status) params.set('status', newFilters.status);
     if (newFilters.category) params.set('category', newFilters.category);
     if (newFilters.search) params.set('search', newFilters.search);
+    if (newFilters.createdById) params.set('createdById', newFilters.createdById);
+    if (newFilters.createdByRole) params.set('createdByRole', newFilters.createdByRole);
 
     const queryString = params.toString();
     router.push(queryString ? `/transactions?${queryString}` : '/transactions', { scroll: false });
@@ -106,6 +171,8 @@ export default function TransactionsPage() {
         status: filters.status,
         category: filters.category,
         search: filters.search,
+        createdById: filters.createdById,
+        createdByRole: filters.createdByRole,
       };
 
       const blob = format === 'csv'
@@ -181,7 +248,7 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <Card>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-4`}>
           <div className="lg:col-span-2">
             <div className="relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -214,6 +281,16 @@ export default function TransactionsPage() {
             onChange={(e) => handleFilterChange('category', e.target.value)}
             placeholder="Category"
           />
+
+          {isAdmin && (
+            <Select
+              label="Member"
+              options={memberTopOptions}
+              groups={memberGroups}
+              value={selectedMember}
+              onChange={(e) => handleMemberChange(e.target.value)}
+            />
+          )}
         </div>
       </Card>
 
@@ -223,7 +300,7 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-1">
-                Total Amount {(filters.type || filters.status || filters.category || filters.search) && '(Filtered)'}
+                Total Amount {(filters.type || filters.status || filters.category || filters.search || filters.createdById || filters.createdByRole) && '(Filtered)'}
               </h3>
               <p className="text-3xl font-bold text-gray-900">
                 {formatAmount(totalAmount)}
@@ -232,6 +309,8 @@ export default function TransactionsPage() {
                 Based on {data?.total || 0} transaction{(data?.total || 0) !== 1 ? 's' : ''}
                 {filters.type && ` · Type: ${filters.type}`}
                 {filters.status && ` · Status: ${filters.status}`}
+                {filters.createdById && ` · Member: ${allUsers.find((u: UserResponseDto) => u.id === filters.createdById)?.email || filters.createdById}`}
+                {filters.createdByRole && ` · Role: ${filters.createdByRole}`}
               </p>
             </div>
             <div className="hidden sm:flex items-center justify-center w-16 h-16 rounded-full bg-blue-100">
@@ -263,12 +342,12 @@ export default function TransactionsPage() {
           <EmptyState
             title="No transactions found"
             description={
-              filters.search || filters.type || filters.status || filters.category
+              filters.search || filters.type || filters.status || filters.category || filters.createdById || filters.createdByRole
                 ? 'Try adjusting your filters'
                 : 'Create your first transaction to get started'
             }
             action={
-              !filters.search && !filters.type && !filters.status && !filters.category ? (
+              !filters.search && !filters.type && !filters.status && !filters.category && !filters.createdById && !filters.createdByRole ? (
                 <Link href="/transactions/new">
                   <Button size="sm">
                     <Plus className="w-4 h-4 me-2" />
@@ -281,6 +360,7 @@ export default function TransactionsPage() {
                   variant="outline"
                   onClick={() => {
                     setFilters({ page: 1, limit: 20 });
+                    setSelectedMember('');
                     router.push('/transactions');
                   }}
                 >

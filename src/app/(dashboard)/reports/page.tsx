@@ -15,7 +15,7 @@ import {
   downloadBlob,
 } from '@/lib/services/reports';
 import { getUsers } from '@/lib/services/users';
-import { ReportQueryDto, TransactionStatus } from '@/types/api';
+import { ReportQueryDto, TransactionStatus, UserResponseDto } from '@/types/api';
 import { formatAmount, formatDateShort } from '@/utils/formatters';
 import { Card, StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +33,7 @@ export default function ReportsPage() {
     endDate: format(endOfMonth(today), 'yyyy-MM-dd'),
   });
 
-  const [selectedUserId, setSelectedUserId] = useState('');
+  const [selectedMember, setSelectedMember] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('APPROVED');
   const [activeTab, setActiveTab] = useState<'overview' | 'comparison'>('overview');
   const [isExporting, setIsExporting] = useState(false);
@@ -44,30 +44,47 @@ export default function ReportsPage() {
       ? 'End date must be after or equal to start date'
       : '';
 
-  // Fetch sales users for dropdown
+  // Fetch all users for dropdown
   const { data: usersData } = useQuery({
-    queryKey: ['users', 'sales-dropdown'],
-    queryFn: () => getUsers({ role: Role.SALES, limit: 100 }),
+    queryKey: ['users', 'members-dropdown'],
+    queryFn: () => getUsers({ limit: 100 }),
   });
 
-  const salesUsers = usersData?.data || [];
+  const allUsers = usersData?.data || [];
+  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES);
+  const adminUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.ADMIN);
+
+  // Parse selected member value: could be a user ID, "role:SALES", or "role:ADMIN"
+  const isRoleFilter = selectedMember.startsWith('role:');
+  const selectedRole = isRoleFilter ? (selectedMember.split(':')[1] as Role) : undefined;
+  const selectedUserId = isRoleFilter ? undefined : selectedMember || undefined;
 
   // Build query with filters
+  const memberFilter: Partial<ReportQueryDto> = {};
+  if (selectedUserId) {
+    memberFilter.createdById = selectedUserId;
+  } else if (selectedRole) {
+    memberFilter.createdByRole = selectedRole;
+  }
+
   const query: ReportQueryDto = {
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
-    ...(selectedUserId ? { createdById: selectedUserId } : {}),
+    ...memberFilter,
     ...(selectedStatus ? { status: selectedStatus as TransactionStatus } : {}),
   };
 
   // Balance query (includes user filter and status)
   const balanceQuery: ReportQueryDto = {
-    ...(selectedUserId ? { createdById: selectedUserId } : {}),
+    ...memberFilter,
     ...(selectedStatus ? { status: selectedStatus as TransactionStatus } : {}),
   };
 
   // Selected user email for display
-  const selectedUserEmail = salesUsers.find((u) => u.id === selectedUserId)?.email;
+  const selectedUserEmail = allUsers.find((u: UserResponseDto) => u.id === selectedUserId)?.email;
+  const selectedMemberLabel = selectedRole
+    ? `All ${selectedRole.charAt(0) + selectedRole.slice(1).toLowerCase()}s`
+    : selectedUserEmail;
 
   // Fetch balance
   const { data: balance, isLoading: balanceLoading } = useQuery({
@@ -140,9 +157,25 @@ export default function ReportsPage() {
     { value: '', label: 'All Statuses' },
   ];
 
-  const userOptions = [
-    { value: '', label: 'All Sales Members' },
-    ...salesUsers.map((u) => ({ value: u.id, label: u.email })),
+  const memberTopOptions = [
+    { value: '', label: 'All Members' },
+  ];
+
+  const memberGroups = [
+    {
+      label: 'Sales Members',
+      options: [
+        { value: 'role:SALES', label: 'All Sales Members' },
+        ...salesUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+      ],
+    },
+    {
+      label: 'Admins',
+      options: [
+        { value: 'role:ADMIN', label: 'All Admins' },
+        ...adminUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+      ],
+    },
   ];
 
   return (
@@ -198,10 +231,11 @@ export default function ReportsPage() {
               error={dateRangeError}
             />
             <Select
-              label="Sales Member"
-              options={userOptions}
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
+              label="Member"
+              options={memberTopOptions}
+              groups={memberGroups}
+              value={selectedMember}
+              onChange={(e) => setSelectedMember(e.target.value)}
             />
             <Select
               label="Status"
@@ -244,8 +278,8 @@ export default function ReportsPage() {
             {/* All-Time Balance */}
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                {selectedUserEmail
-                  ? `Balance: ${selectedUserEmail}`
+                {selectedMemberLabel
+                  ? `Balance: ${selectedMemberLabel}`
                   : 'Current Balance (All Time)'}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

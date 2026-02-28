@@ -143,6 +143,7 @@ export interface TransactionQueryDto {
   startDate?: string;
   endDate?: string;
   createdById?: string;
+  createdByRole?: Role;
   minAmount?: number;
   maxAmount?: number;
   search?: string;
@@ -195,6 +196,7 @@ export interface ReportQueryDto {
   status?: TransactionStatus;
   category?: TransactionCategory;
   createdById?: string;
+  createdByRole?: Role;
 }
 
 export interface SummaryDto {

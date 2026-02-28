@@ -8,16 +8,22 @@ export interface SelectOption {
   label: string;
 }
 
+export interface SelectOptionGroup {
+  label: string;
+  options: SelectOption[];
+}
+
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
   options: SelectOption[];
+  groups?: SelectOptionGroup[];
   placeholder?: string;
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
   (
-    { className, label, error, options, placeholder, id, ...props },
+    { className, label, error, options, groups, placeholder, id, ...props },
     ref
   ) => {
     const selectId = id || props.name;
@@ -58,6 +64,15 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
+          ))}
+          {groups?.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         {error && (
