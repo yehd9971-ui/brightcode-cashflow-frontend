@@ -4,10 +4,11 @@ import {
   BalanceResponseDto,
   ReportResponseDto,
   ExpensesByCategoryResponseDto,
+  SalesComparisonResponseDto,
 } from '@/types/api';
 
-export async function getBalance(): Promise<BalanceResponseDto> {
-  const response = await api.get<BalanceResponseDto>('/reports/balance');
+export async function getBalance(query?: ReportQueryDto): Promise<BalanceResponseDto> {
+  const response = await api.get<BalanceResponseDto>('/reports/balance', { params: query });
   return response.data;
 }
 
@@ -44,6 +45,11 @@ export async function exportToCsv(query?: ReportQueryDto): Promise<Blob> {
     params: summaryParams,
     responseType: 'blob',
   });
+  return response.data;
+}
+
+export async function getSalesComparison(query?: ReportQueryDto): Promise<SalesComparisonResponseDto> {
+  const response = await api.get<SalesComparisonResponseDto>('/reports/sales-comparison', { params: query });
   return response.data;
 }
 

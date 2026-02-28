@@ -194,6 +194,7 @@ export interface ReportQueryDto {
   type?: TransactionType;
   status?: TransactionStatus;
   category?: TransactionCategory;
+  createdById?: string;
 }
 
 export interface SummaryDto {
@@ -240,6 +241,27 @@ export interface ExpensesByCategoryResponseDto {
   toDate?: string;
   categories: CategoryExpenseDto[];
   grandTotal: string; // String for precision
+  currency: string;
+}
+
+export interface SalesMemberReportDto {
+  userId: string;
+  email: string;
+  totalIn: string;
+  totalOut: string;
+  netCashflow: string;
+  countIn: number;
+  countOut: number;
+  totalCount: number;
+}
+
+export interface SalesComparisonResponseDto {
+  members: SalesMemberReportDto[];
+  totals: SummaryDto;
+  generatedAt: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
   currency: string;
 }
 
