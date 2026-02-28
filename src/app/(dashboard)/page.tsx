@@ -27,7 +27,7 @@ export default function DashboardPage() {
   // Fetch balance (ADMIN only)
   const { data: balance, isLoading: balanceLoading } = useQuery({
     queryKey: ['reports', 'balance'],
-    queryFn: getBalance,
+    queryFn: () => getBalance(),
     enabled: isAdmin,
   });
 
