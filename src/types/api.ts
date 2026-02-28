@@ -10,6 +10,7 @@
 export enum Role {
   ADMIN = 'ADMIN',
   SALES = 'SALES',
+  SALES_MANAGER = 'SALES_MANAGER',
 }
 
 export enum TransactionType {
@@ -47,12 +48,15 @@ export enum AuditAction {
   UPLOAD = 'UPLOAD',
   DEACTIVATE = 'DEACTIVATE',
   ACTIVATE = 'ACTIVATE',
+  CLOCK_IN = 'CLOCK_IN',
+  CLOCK_OUT = 'CLOCK_OUT',
 }
 
 export enum EntityType {
   USER = 'USER',
   TRANSACTION = 'TRANSACTION',
   ATTACHMENT = 'ATTACHMENT',
+  ATTENDANCE = 'ATTENDANCE',
 }
 
 // ============================================================================
@@ -297,6 +301,42 @@ export interface AuditLogResponseDto {
   actor?: AuditActorDto;
   ipAddress?: string;
   timestamp: string;
+}
+
+// ============================================================================
+// ATTENDANCE TYPES
+// ============================================================================
+
+export interface AttendanceSessionResponseDto {
+  id: string;
+  userId: string;
+  userEmail: string;
+  clockIn: string;
+  clockOut?: string;
+  autoClosedAt?: string;
+  durationMinutes?: number;
+}
+
+export interface AttendanceQueryDto {
+  page?: number;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+}
+
+export interface DailyAttendanceDto {
+  date: string;
+  totalMinutes: number;
+  sessionsCount: number;
+}
+
+export interface AttendanceSummaryResponseDto {
+  dailyBreakdown: DailyAttendanceDto[];
+  totalMinutes: number;
+  totalHoursFormatted: string;
+  totalDaysWorked: number;
+  averageMinutesPerDay: number;
 }
 
 // ============================================================================

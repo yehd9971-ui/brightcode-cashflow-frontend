@@ -28,6 +28,7 @@ interface AuthContextValue extends AuthState {
   logout: () => Promise<void>;
   isAdmin: boolean;
   isSales: boolean;
+  isSalesManager: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -176,6 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const isAdmin = state.user?.role === Role.ADMIN;
   const isSales = state.user?.role === Role.SALES;
+  const isSalesManager = state.user?.role === Role.SALES_MANAGER;
 
   const value: AuthContextValue = {
     ...state,
@@ -183,6 +185,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     isAdmin,
     isSales,
+    isSalesManager,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

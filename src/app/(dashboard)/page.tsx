@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -9,10 +10,14 @@ import {
   Plus,
   Clock,
   ArrowRight,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getBalance } from '@/lib/services/reports';
 import { getTransactions } from '@/lib/services/transactions';
+import { getAttendanceStatus, clockIn, clockOut } from '@/lib/services/attendance';
 import { TransactionStatus } from '@/types/api';
 import { formatAmount, formatDateShort } from '@/utils/formatters';
 import { Card, StatCard } from '@/components/ui/Card';
@@ -21,8 +26,21 @@ import { StatusBadge, TypeBadge } from '@/components/ui/StatusBadge';
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+function formatDuration(startTime: string): string {
+  const start = new Date(startTime).getTime();
+  const now = Date.now();
+  const diffMs = now - start;
+  const hours = Math.floor(diffMs / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+  return `${hours}h ${minutes}m`;
+}
+
 export default function DashboardPage() {
-  const { user, isAdmin, isSales } = useAuth();
+  const { user, isAdmin, isSales, isSalesManager } = useAuth();
+  const queryClient = useQueryClient();
+  const [currentDuration, setCurrentDuration] = useState('');
+
+  const canClock = isSales || isSalesManager;
 
   // Fetch balance (ADMIN only)
   const { data: balance, isLoading: balanceLoading } = useQuery({
@@ -30,6 +48,30 @@ export default function DashboardPage() {
     queryFn: () => getBalance(),
     enabled: isAdmin,
   });
+
+  // Fetch attendance status (SALES + SALES_MANAGER only)
+  const { data: attendanceStatus, isLoading: attendanceLoading } = useQuery({
+    queryKey: ['attendance', 'status'],
+    queryFn: () => getAttendanceStatus(),
+    enabled: canClock,
+    refetchInterval: 60000,
+  });
+
+  // Update duration timer
+  useEffect(() => {
+    if (!attendanceStatus?.clockIn || attendanceStatus?.clockOut) {
+      setCurrentDuration('');
+      return;
+    }
+
+    setCurrentDuration(formatDuration(attendanceStatus.clockIn));
+
+    const interval = setInterval(() => {
+      setCurrentDuration(formatDuration(attendanceStatus.clockIn));
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [attendanceStatus]);
 
   // Fetch pending transactions count
   const { data: pendingData, isLoading: pendingLoading } = useQuery({
@@ -43,8 +85,31 @@ export default function DashboardPage() {
     queryFn: () => getTransactions({ limit: 5 }),
   });
 
+  const clockInMutation = useMutation({
+    mutationFn: clockIn,
+    onSuccess: () => {
+      toast.success('Clocked in successfully');
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'status'] });
+    },
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+      toast.error(error.response?.data?.message || 'Failed to clock in');
+    },
+  });
+
+  const clockOutMutation = useMutation({
+    mutationFn: clockOut,
+    onSuccess: () => {
+      toast.success('Clocked out successfully');
+      queryClient.invalidateQueries({ queryKey: ['attendance', 'status'] });
+    },
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+      toast.error(error.response?.data?.message || 'Failed to clock out');
+    },
+  });
+
   const pendingCount = pendingData?.total || 0;
   const recentTransactions = recentData?.data || [];
+  const isClockedIn = attendanceStatus && !attendanceStatus.clockOut;
 
   return (
     <div className="space-y-6">
@@ -66,6 +131,60 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </div>
+
+      {/* Attendance Clock Buttons (SALES + SALES_MANAGER) */}
+      {canClock && (
+        <Card title="Attendance">
+          {attendanceLoading ? (
+            <div className="h-16 flex items-center justify-center">
+              <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+            </div>
+          ) : isClockedIn ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <Clock className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-green-700">Currently Clocked In</p>
+                  <p className="text-sm text-gray-500">
+                    Duration: {currentDuration || '0h 0m'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => clockOutMutation.mutate()}
+                loading={clockOutMutation.isPending}
+                disabled={clockOutMutation.isPending}
+              >
+                <LogOut className="w-4 h-4 me-2" />
+                Clock Out
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="p-3 bg-gray-100 rounded-full">
+                  <Clock className="w-6 h-6 text-gray-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Not Clocked In</p>
+                  <p className="text-sm text-gray-500">Press to start your work session</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => clockInMutation.mutate()}
+                loading={clockInMutation.isPending}
+                disabled={clockInMutation.isPending}
+              >
+                <LogIn className="w-4 h-4 me-2" />
+                Com (Clock In)
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Balance Cards (ADMIN only) */}
       {isAdmin && (
@@ -135,8 +254,8 @@ export default function DashboardPage() {
           )}
         </Card>
 
-        {/* Quick Action for SALES */}
-        {isSales && (
+        {/* Quick Action for SALES and SALES_MANAGER */}
+        {(isSales || isSalesManager) && (
           <Card title="Quick Actions">
             <div className="space-y-3">
               <Link href="/transactions/new" className="block">
@@ -211,8 +330,8 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Recent Transactions Table (for SALES) */}
-      {isSales && (
+      {/* Recent Transactions Table (for SALES and SALES_MANAGER) */}
+      {(isSales || isSalesManager) && (
         <Card
           title="My Recent Transactions"
           actions={

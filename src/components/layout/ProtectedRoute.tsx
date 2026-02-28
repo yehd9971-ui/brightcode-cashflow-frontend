@@ -9,9 +9,10 @@ import { FullPageLoading } from '@/components/ui/Loading';
 interface ProtectedRouteProps {
   children: ReactNode;
   requiredRole?: Role;
+  requiredRoles?: Role[];
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole, requiredRoles }: ProtectedRouteProps) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
@@ -32,7 +33,8 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   // Check role requirement
-  if (requiredRole && user?.role !== requiredRole) {
+  const allowedRoles = requiredRoles || (requiredRole ? [requiredRole] : undefined);
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

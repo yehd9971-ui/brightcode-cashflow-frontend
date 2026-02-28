@@ -10,6 +10,8 @@ import {
   BarChart3,
   Users,
   ClipboardList,
+  Clock,
+  UserCircle,
   X,
 } from 'lucide-react';
 import { Role } from '@/types/api';
@@ -44,7 +46,19 @@ const navItems: NavItem[] = [
     label: 'Reports',
     href: '/reports',
     icon: BarChart3,
-    roles: [Role.ADMIN],
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
+  },
+  {
+    label: 'Attendance',
+    href: '/attendance',
+    icon: Clock,
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
+  },
+  {
+    label: 'My Reports',
+    href: '/my-reports',
+    icon: UserCircle,
+    roles: [Role.SALES, Role.SALES_MANAGER],
   },
   {
     label: 'Users',

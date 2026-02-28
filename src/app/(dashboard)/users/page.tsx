@@ -37,6 +37,7 @@ const roleOptions = [
   { value: '', label: 'All Roles' },
   { value: Role.ADMIN, label: 'Admin' },
   { value: Role.SALES, label: 'Sales' },
+  { value: Role.SALES_MANAGER, label: 'Sales Manager' },
 ];
 
 const statusOptions = [
@@ -47,6 +48,7 @@ const statusOptions = [
 
 const roleFormOptions = [
   { value: Role.SALES, label: 'Sales' },
+  { value: Role.SALES_MANAGER, label: 'Sales Manager' },
   { value: Role.ADMIN, label: 'Admin' },
 ];
 
@@ -293,9 +295,15 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3">
                           <Badge
-                            variant={user.role === Role.ADMIN ? 'info' : 'neutral'}
+                            variant={
+                              user.role === Role.ADMIN
+                                ? 'info'
+                                : user.role === Role.SALES_MANAGER
+                                ? 'warning'
+                                : 'neutral'
+                            }
                           >
-                            {user.role}
+                            {user.role === Role.SALES_MANAGER ? 'SALES MANAGER' : user.role}
                           </Badge>
                         </td>
                         <td className="px-4 py-3">

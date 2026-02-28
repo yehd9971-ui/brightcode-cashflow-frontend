@@ -23,10 +23,12 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Loading';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { useAuth } from '@/contexts/AuthContext';
 import { Role } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 export default function ReportsPage() {
+  const { isAdmin } = useAuth();
   const today = new Date();
   const [dateRange, setDateRange] = useState({
     startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
@@ -86,10 +88,11 @@ export default function ReportsPage() {
     ? `All ${selectedRole.charAt(0) + selectedRole.slice(1).toLowerCase()}s`
     : selectedUserEmail;
 
-  // Fetch balance
+  // Fetch balance (ADMIN only)
   const { data: balance, isLoading: balanceLoading } = useQuery({
     queryKey: ['reports', 'balance', balanceQuery],
     queryFn: () => getBalance(balanceQuery),
+    enabled: isAdmin,
   });
 
   // Fetch summary for date range
@@ -98,10 +101,11 @@ export default function ReportsPage() {
     queryFn: () => getSummary(query),
   });
 
-  // Fetch expenses by category
+  // Fetch expenses by category (ADMIN only)
   const { data: expenses, isLoading: expensesLoading } = useQuery({
     queryKey: ['reports', 'expenses', query],
     queryFn: () => getExpensesByCategory(query),
+    enabled: isAdmin,
   });
 
   // Fetch sales comparison (lazy — only when tab is active)
@@ -179,7 +183,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <ProtectedRoute requiredRole={Role.ADMIN}>
+    <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -275,7 +279,8 @@ export default function ReportsPage() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
-            {/* All-Time Balance */}
+            {/* All-Time Balance (ADMIN only) */}
+            {isAdmin && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 {selectedMemberLabel
@@ -311,6 +316,7 @@ export default function ReportsPage() {
                 ) : null}
               </div>
             </div>
+            )}
 
             {/* Period Summary */}
             <Card
@@ -358,7 +364,8 @@ export default function ReportsPage() {
               ) : null}
             </Card>
 
-            {/* Expenses by Category */}
+            {/* Expenses by Category (ADMIN only) */}
+            {isAdmin && (
             <Card title="Expenses by Category">
               {expensesLoading ? (
                 <TableSkeleton rows={5} />
@@ -403,6 +410,7 @@ export default function ReportsPage() {
                 </p>
               )}
             </Card>
+            )}
           </>
         )}
 

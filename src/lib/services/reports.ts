@@ -53,6 +53,11 @@ export async function getSalesComparison(query?: ReportQueryDto): Promise<SalesC
   return response.data;
 }
 
+export async function getMySummary(query?: ReportQueryDto): Promise<ReportResponseDto> {
+  const response = await api.get<ReportResponseDto>('/reports/my-summary', { params: query });
+  return response.data;
+}
+
 // Helper function to download blob as file
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob);

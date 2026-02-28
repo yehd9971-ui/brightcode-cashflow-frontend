@@ -44,6 +44,8 @@ const actionVariants: Record<AuditAction, 'success' | 'warning' | 'error' | 'inf
   [AuditAction.UPLOAD]: 'info',
   [AuditAction.DEACTIVATE]: 'error',
   [AuditAction.ACTIVATE]: 'success',
+  [AuditAction.CLOCK_IN]: 'success',
+  [AuditAction.CLOCK_OUT]: 'info',
 };
 
 function ExpandableRow({ log }: { log: AuditLogResponseDto }) {
