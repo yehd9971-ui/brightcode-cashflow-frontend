@@ -444,7 +444,7 @@ export default function TransactionsPage() {
                     <th className="text-center text-sm font-medium text-gray-500 px-4 py-3">
                       Status
                     </th>
-                    {isAdmin && (
+                    {(isAdmin || isSalesManager) && (
                       <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">
                         Created By
                       </th>
@@ -486,7 +486,7 @@ export default function TransactionsPage() {
                       <td className="px-4 py-3 text-center">
                         <StatusBadge status={tx.status} size="sm" />
                       </td>
-                      {isAdmin && (
+                      {(isAdmin || isSalesManager) && (
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {tx.createdBy.email}
                         </td>
