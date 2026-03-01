@@ -173,13 +173,15 @@ export default function ReportsPage() {
         ...salesUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
       ],
     },
-    {
-      label: 'Admins',
-      options: [
-        { value: 'role:ADMIN', label: 'All Admins' },
-        ...adminUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
-      ],
-    },
+    ...(isAdmin
+      ? [{
+          label: 'Admins',
+          options: [
+            { value: 'role:ADMIN', label: 'All Admins' },
+            ...adminUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+          ],
+        }]
+      : []),
   ];
 
   return (

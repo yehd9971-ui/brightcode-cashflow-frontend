@@ -364,7 +364,7 @@ export default function TransactionDetailPage() {
                   {formatDate(transaction.createdAt)}
                 </dd>
               </div>
-              {transaction.approvedBy && (
+              {isAdmin && transaction.approvedBy && (
                 <>
                   <div>
                     <dt className="text-sm text-gray-500">Approved By</dt>
