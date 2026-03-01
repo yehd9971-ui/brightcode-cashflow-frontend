@@ -53,7 +53,7 @@ export default function ReportsPage() {
   });
 
   const allUsers = usersData?.data || [];
-  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES);
+  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES || u.role === Role.SALES_MANAGER);
   const adminUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.ADMIN);
 
   // Parse selected member value: could be a user ID, "role:SALES", or "role:ADMIN"
