@@ -80,7 +80,7 @@ export default function TransactionsPage() {
   });
 
   const allUsers = usersData?.data || [];
-  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES);
+  const salesUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.SALES || u.role === Role.SALES_MANAGER);
   const adminUsers = allUsers.filter((u: UserResponseDto) => u.role === Role.ADMIN);
 
   const memberTopOptions = [
