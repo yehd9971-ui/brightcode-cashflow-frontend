@@ -326,6 +326,7 @@ export interface AttendanceQueryDto {
 }
 
 export interface DailyAttendanceDto {
+  email: string;
   date: string;
   totalMinutes: number;
   sessionsCount: number;

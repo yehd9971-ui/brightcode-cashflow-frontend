@@ -263,6 +263,7 @@ export default function AttendancePage() {
                       <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
+                            <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">Email</th>
                             <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">Date</th>
                             <th className="text-end text-sm font-medium text-gray-500 px-4 py-3">Sessions</th>
                             <th className="text-end text-sm font-medium text-gray-500 px-4 py-3">Total Hours</th>
@@ -270,7 +271,8 @@ export default function AttendancePage() {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {summaryData.dailyBreakdown.map((day) => (
-                            <tr key={day.date} className="hover:bg-gray-50">
+                            <tr key={`${day.email}-${day.date}`} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-700">{day.email}</td>
                               <td className="px-4 py-3 text-sm text-gray-900">{day.date}</td>
                               <td className="px-4 py-3 text-sm text-end text-gray-700">{day.sessionsCount}</td>
                               <td className="px-4 py-3 text-sm text-end font-medium text-gray-900">
