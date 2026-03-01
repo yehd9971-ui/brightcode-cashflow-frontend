@@ -35,12 +35,26 @@ function formatDuration(startTime: string): string {
   return `${hours}h ${minutes}m`;
 }
 
+function isWithinAttendanceHours(): boolean {
+  const egyptNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+  const hour = egyptNow.getHours();
+  return hour >= 10 && hour < 23;
+}
+
 export default function DashboardPage() {
   const { user, isAdmin, isSales, isSalesManager } = useAuth();
   const queryClient = useQueryClient();
   const [currentDuration, setCurrentDuration] = useState('');
 
   const canClock = isSales || isSalesManager;
+  const [canClockIn, setCanClockIn] = useState(isWithinAttendanceHours());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCanClockIn(isWithinAttendanceHours());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch balance (ADMIN only)
   const { data: balance, isLoading: balanceLoading } = useQuery({
@@ -133,7 +147,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Attendance Clock Buttons (SALES + SALES_MANAGER) */}
-      {canClock && (
+      {canClock && (isClockedIn || canClockIn) && (
         <Card title="Attendance">
           {attendanceLoading ? (
             <div className="h-16 flex items-center justify-center">
