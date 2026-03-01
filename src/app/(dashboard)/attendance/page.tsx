@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAttendanceHistory, getAttendanceSummary } from '@/lib/services/attendance';
+import { getAttendanceHistory, getAttendanceSummary, getActiveSessions } from '@/lib/services/attendance';
 import { getUsers } from '@/lib/services/users';
 import { Role, UserResponseDto } from '@/types/api';
 import { formatDateShort } from '@/utils/formatters';
@@ -31,6 +31,13 @@ function formatTime(dateString: string): string {
     minute: '2-digit',
     hour12: true,
   });
+}
+
+function formatDuration(clockInStr: string): string {
+  const diff = Date.now() - new Date(clockInStr).getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return `${h}h ${m}m`;
 }
 
 export default function AttendancePage() {
@@ -90,6 +97,12 @@ export default function AttendancePage() {
     enabled: activeTab === 'summary',
   });
 
+  // Fetch active sessions (who is online now)
+  const { data: activeSessions, isLoading: activeLoading } = useQuery({
+    queryKey: ['attendance', 'active-sessions'],
+    queryFn: getActiveSessions,
+  });
+
   const sessions = historyData?.data || [];
   const totalPages = Math.ceil((historyData?.total || 0) / limit);
 
@@ -101,6 +114,48 @@ export default function AttendancePage() {
           <h1 className="text-2xl font-bold text-gray-900">Attendance Reports</h1>
           <p className="text-gray-500">View employee attendance records and summaries</p>
         </div>
+
+        {/* Who is Online Now */}
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+              </span>
+              <h2 className="text-lg font-semibold text-gray-900">
+                {activeLoading ? '...' : (activeSessions?.length || 0)} Online Now
+              </h2>
+            </div>
+
+            {activeLoading ? (
+              <TableSkeleton rows={3} />
+            ) : activeSessions && activeSessions.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-green-100/50 border-b border-green-200">
+                    <tr>
+                      <th className="text-start text-sm font-medium text-gray-600 px-4 py-2">Email</th>
+                      <th className="text-start text-sm font-medium text-gray-600 px-4 py-2">Clock In</th>
+                      <th className="text-end text-sm font-medium text-gray-600 px-4 py-2">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-green-100">
+                    {activeSessions.map((session) => (
+                      <tr key={session.id}>
+                        <td className="px-4 py-2 text-sm text-gray-900">{session.userEmail}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{formatTime(session.clockIn)}</td>
+                        <td className="px-4 py-2 text-sm text-end font-medium text-gray-900">{formatDuration(session.clockIn)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No one is currently online</p>
+            )}
+          </div>
+        </Card>
 
         {/* Filters */}
         <Card>

@@ -12,7 +12,6 @@ import { getUsers } from '@/lib/services/users';
 import {
   TransactionType,
   TransactionStatus,
-  TransactionCategory,
   TransactionQueryDto,
   Role,
   UserResponseDto,
@@ -40,26 +39,19 @@ const statusOptions = [
   { value: TransactionStatus.REJECTED, label: 'Rejected' },
 ];
 
-const categoryOptions = [
-  { value: '', label: 'All Categories' },
-  ...Object.values(TransactionCategory).map((cat) => ({
-    value: cat,
-    label: cat.charAt(0) + cat.slice(1).toLowerCase(),
-  })),
-];
-
 export default function TransactionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSalesManager, user } = useAuth();
 
   const [filters, setFilters] = useState<TransactionQueryDto>({
     page: Number(searchParams.get('page')) || 1,
     limit: 20,
     type: (searchParams.get('type') as TransactionType) || undefined,
     status: (searchParams.get('status') as TransactionStatus) || undefined,
-    category: (searchParams.get('category') as TransactionCategory) || undefined,
     search: searchParams.get('search') || '',
+    startDate: searchParams.get('startDate') || undefined,
+    endDate: searchParams.get('endDate') || undefined,
     createdById: searchParams.get('createdById') || undefined,
     createdByRole: (searchParams.get('createdByRole') as Role) || undefined,
   });
@@ -72,13 +64,19 @@ export default function TransactionsPage() {
     return '';
   });
 
+  const [selectedCreatedBy, setSelectedCreatedBy] = useState(() => {
+    const createdById = searchParams.get('createdById');
+    if (createdById) return createdById;
+    return '';
+  });
+
   const [isExporting, setIsExporting] = useState<'csv' | 'excel' | null>(null);
 
   // Fetch all users for member dropdown (admin only)
   const { data: usersData } = useQuery({
     queryKey: ['users', 'members-dropdown'],
     queryFn: () => getUsers({ limit: 100 }),
-    enabled: isAdmin,
+    enabled: isAdmin || isSalesManager,
   });
 
   const allUsers = usersData?.data || [];
@@ -105,6 +103,29 @@ export default function TransactionsPage() {
       ],
     },
   ];
+
+  // Created By options for SALES_MANAGER
+  const createdByOptions = [
+    { value: '', label: 'All' },
+    { value: 'self', label: 'My Transactions' },
+    ...salesUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+  ];
+
+  const handleCreatedByChange = (value: string) => {
+    setSelectedCreatedBy(value);
+    const newFilters: TransactionQueryDto = {
+      ...filters,
+      createdById: undefined,
+      page: 1,
+    };
+    if (value === 'self') {
+      newFilters.createdById = user?.id;
+    } else if (value) {
+      newFilters.createdById = value;
+    }
+    setFilters(newFilters);
+    updateUrl(newFilters);
+  };
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['transactions', filters],
@@ -154,8 +175,9 @@ export default function TransactionsPage() {
     if (newFilters.page && newFilters.page > 1) params.set('page', String(newFilters.page));
     if (newFilters.type) params.set('type', newFilters.type);
     if (newFilters.status) params.set('status', newFilters.status);
-    if (newFilters.category) params.set('category', newFilters.category);
     if (newFilters.search) params.set('search', newFilters.search);
+    if (newFilters.startDate) params.set('startDate', newFilters.startDate);
+    if (newFilters.endDate) params.set('endDate', newFilters.endDate);
     if (newFilters.createdById) params.set('createdById', newFilters.createdById);
     if (newFilters.createdByRole) params.set('createdByRole', newFilters.createdByRole);
 
@@ -169,8 +191,9 @@ export default function TransactionsPage() {
       const exportFilters = {
         type: filters.type,
         status: filters.status,
-        category: filters.category,
         search: filters.search,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
         createdById: filters.createdById,
         createdByRole: filters.createdByRole,
       };
@@ -248,49 +271,69 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <Card>
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-4`}>
-          <div className="lg:col-span-2">
-            <div className="relative">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search transactions..."
-                value={filters.search || ''}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="ps-10"
-              />
+        <div className="space-y-4">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : isSalesManager ? 'lg:grid-cols-4' : 'lg:grid-cols-4'} gap-4`}>
+            <div className="lg:col-span-2">
+              <div className="relative">
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search transactions..."
+                  value={filters.search || ''}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="ps-10"
+                />
+              </div>
             </div>
+
+            {!isSalesManager && (
+              <Select
+                options={typeOptions}
+                value={filters.type || ''}
+                onChange={(e) => handleFilterChange('type', e.target.value)}
+                placeholder="Type"
+              />
+            )}
+
+            <Select
+              options={statusOptions}
+              value={filters.status || ''}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              placeholder="Status"
+            />
+
+            {isAdmin && (
+              <Select
+                options={memberTopOptions}
+                groups={memberGroups}
+                value={selectedMember}
+                onChange={(e) => handleMemberChange(e.target.value)}
+              />
+            )}
+
+            {isSalesManager && (
+              <Select
+                options={createdByOptions}
+                value={selectedCreatedBy}
+                onChange={(e) => handleCreatedByChange(e.target.value)}
+              />
+            )}
           </div>
 
-          <Select
-            options={typeOptions}
-            value={filters.type || ''}
-            onChange={(e) => handleFilterChange('type', e.target.value)}
-            placeholder="Type"
-          />
-
-          <Select
-            options={statusOptions}
-            value={filters.status || ''}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-            placeholder="Status"
-          />
-
-          <Select
-            options={categoryOptions}
-            value={filters.category || ''}
-            onChange={(e) => handleFilterChange('category', e.target.value)}
-            placeholder="Category"
-          />
-
-          {isAdmin && (
-            <Select
-              label="Member"
-              options={memberTopOptions}
-              groups={memberGroups}
-              value={selectedMember}
-              onChange={(e) => handleMemberChange(e.target.value)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Input
+              label="From Date"
+              type="date"
+              value={filters.startDate || ''}
+              onChange={(e) => handleFilterChange('startDate', e.target.value)}
             />
-          )}
+            <Input
+              label="To Date"
+              type="date"
+              value={filters.endDate || ''}
+              min={filters.startDate}
+              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+            />
+          </div>
         </div>
       </Card>
 
@@ -300,7 +343,7 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-1">
-                Total Amount {(filters.type || filters.status || filters.category || filters.search || filters.createdById || filters.createdByRole) && '(Filtered)'}
+                Total Amount {(filters.type || filters.status || filters.search || filters.startDate || filters.endDate || filters.createdById || filters.createdByRole) && '(Filtered)'}
               </h3>
               <p className="text-3xl font-bold text-gray-900">
                 {formatAmount(totalAmount)}
@@ -309,6 +352,8 @@ export default function TransactionsPage() {
                 Based on {data?.total || 0} transaction{(data?.total || 0) !== 1 ? 's' : ''}
                 {filters.type && ` · Type: ${filters.type}`}
                 {filters.status && ` · Status: ${filters.status}`}
+                {filters.startDate && ` · From: ${filters.startDate}`}
+                {filters.endDate && ` · To: ${filters.endDate}`}
                 {filters.createdById && ` · Member: ${allUsers.find((u: UserResponseDto) => u.id === filters.createdById)?.email || filters.createdById}`}
                 {filters.createdByRole && ` · Role: ${filters.createdByRole}`}
               </p>
@@ -342,12 +387,12 @@ export default function TransactionsPage() {
           <EmptyState
             title="No transactions found"
             description={
-              filters.search || filters.type || filters.status || filters.category || filters.createdById || filters.createdByRole
+              filters.search || filters.type || filters.status || filters.startDate || filters.endDate || filters.createdById || filters.createdByRole
                 ? 'Try adjusting your filters'
                 : 'Create your first transaction to get started'
             }
             action={
-              !filters.search && !filters.type && !filters.status && !filters.category && !filters.createdById && !filters.createdByRole ? (
+              !filters.search && !filters.type && !filters.status && !filters.startDate && !filters.endDate && !filters.createdById && !filters.createdByRole ? (
                 <Link href="/transactions/new">
                   <Button size="sm">
                     <Plus className="w-4 h-4 me-2" />
@@ -383,9 +428,6 @@ export default function TransactionsPage() {
                     </th>
                     <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">
                       Type
-                    </th>
-                    <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">
-                      Category
                     </th>
                     <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">
                       Description
@@ -428,9 +470,6 @@ export default function TransactionsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <TypeBadge type={tx.type} size="sm" />
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {tx.category}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
                         {truncateText(tx.description, 50)}

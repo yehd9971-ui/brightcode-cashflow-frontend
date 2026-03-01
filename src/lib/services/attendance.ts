@@ -21,6 +21,11 @@ export async function getAttendanceStatus(): Promise<AttendanceSessionResponseDt
   return response.data;
 }
 
+export async function getActiveSessions(): Promise<AttendanceSessionResponseDto[]> {
+  const response = await api.get<AttendanceSessionResponseDto[]>('/attendance/active-sessions');
+  return response.data;
+}
+
 export async function getAttendanceHistory(
   query?: AttendanceQueryDto,
 ): Promise<PaginatedResponse<AttendanceSessionResponseDto>> {
