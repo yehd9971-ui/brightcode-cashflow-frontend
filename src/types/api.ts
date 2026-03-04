@@ -362,6 +362,7 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   totalAmount?: number; // Total sum of transaction amounts (for filtered results)
+  totalAmountCount?: number; // Count of transactions included in totalAmount calculation
 }
 
 export interface ValidationError {

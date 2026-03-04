@@ -343,13 +343,13 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-gray-600 mb-1">
-                Total Amount {(filters.type || filters.status || filters.search || filters.startDate || filters.endDate || filters.createdById || filters.createdByRole) && '(Filtered)'}
+                Total Amount {filters.status ? '(Filtered)' : '(Approved Only)'}
               </h3>
               <p className="text-3xl font-bold text-gray-900">
                 {formatAmount(totalAmount)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Based on {data?.total || 0} transaction{(data?.total || 0) !== 1 ? 's' : ''}
+                Based on {data?.totalAmountCount ?? data?.total ?? 0} transaction{(data?.totalAmountCount ?? data?.total ?? 0) !== 1 ? 's' : ''}
                 {filters.type && ` · Type: ${filters.type}`}
                 {filters.status && ` · Status: ${filters.status}`}
                 {filters.startDate && ` · From: ${filters.startDate}`}
