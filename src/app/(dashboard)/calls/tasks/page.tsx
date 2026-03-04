@@ -22,7 +22,7 @@ import { DailyProgressCard } from '@/components/calls/DailyProgressCard';
 import { useCallWebSocket } from '@/hooks/useCallWebSocket';
 
 export default function CallTasksPage() {
-  const { user } = useAuth();
+  const { user, isAdmin, isSalesManager } = useAuth();
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
 
@@ -155,6 +155,9 @@ export default function CallTasksPage() {
                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{task.source.replace('_', ' ')}</span>
                     </div>
                     <div className="text-sm text-gray-500">
+                      {(isAdmin || isSalesManager) && task.user && (
+                        <><span className="font-medium text-gray-700">{task.user.email}</span><span className="mx-1">·</span></>
+                      )}
                       <span>{task.taskDate} at {task.taskTime}</span>
                       {task.notes && <span className="ml-3">{task.notes}</span>}
                     </div>
