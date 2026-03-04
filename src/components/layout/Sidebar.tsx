@@ -114,10 +114,11 @@ interface SidebarProps {
   userRole: Role;
   isOpen: boolean;
   onClose: () => void;
-  pendingCount?: number;
+  pendingTransactionCount?: number;
+  pendingCallCount?: number;
 }
 
-export function Sidebar({ userRole, isOpen, onClose, pendingCount }: SidebarProps) {
+export function Sidebar({ userRole, isOpen, onClose, pendingTransactionCount, pendingCallCount }: SidebarProps) {
   const pathname = usePathname();
 
   const filteredItems = navItems.filter(
@@ -169,7 +170,10 @@ export function Sidebar({ userRole, isOpen, onClose, pendingCount }: SidebarProp
               ? pathname === item.href
               : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             const Icon = item.icon;
-            const badge = item.href === '/approvals' ? pendingCount : undefined;
+            const badge =
+              item.href === '/approvals' ? pendingTransactionCount :
+              item.href === '/calls/approvals' ? pendingCallCount :
+              undefined;
 
             return (
               <Link

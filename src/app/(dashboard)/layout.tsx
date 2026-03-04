@@ -34,11 +34,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     refetchInterval: 30000,
   });
 
-  const pendingCount = (pendingData?.total || 0) + (callPendingData?.count || 0);
+  const pendingTransactionCount = pendingData?.total || 0;
+  const pendingCallCount = callPendingData?.count || 0;
 
   return (
     <ProtectedRoute>
-      <AppLayout pendingCount={pendingCount}>{children}</AppLayout>
+      <AppLayout pendingTransactionCount={pendingTransactionCount} pendingCallCount={pendingCallCount}>{children}</AppLayout>
     </ProtectedRoute>
   );
 }

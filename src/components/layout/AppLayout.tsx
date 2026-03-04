@@ -9,10 +9,11 @@ import { FullPageLoading } from '@/components/ui/Loading';
 
 interface AppLayoutProps {
   children: ReactNode;
-  pendingCount?: number;
+  pendingTransactionCount?: number;
+  pendingCallCount?: number;
 }
 
-export function AppLayout({ children, pendingCount }: AppLayoutProps) {
+export function AppLayout({ children, pendingTransactionCount, pendingCallCount }: AppLayoutProps) {
   const { user, isLoading, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -33,7 +34,8 @@ export function AppLayout({ children, pendingCount }: AppLayoutProps) {
         userRole={user.role}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        pendingCount={pendingCount}
+        pendingTransactionCount={pendingTransactionCount}
+        pendingCallCount={pendingCallCount}
       />
 
       <div>
