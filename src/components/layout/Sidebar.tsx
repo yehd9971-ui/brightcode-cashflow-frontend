@@ -13,6 +13,11 @@ import {
   Clock,
   UserCircle,
   X,
+  PhoneCall,
+  ListTodo,
+  PhoneForwarded,
+  LayoutDashboard,
+  PhoneOutgoing,
 } from 'lucide-react';
 import { Role } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -23,6 +28,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   roles?: Role[];
   badge?: number;
+  exact?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -35,6 +41,36 @@ const navItems: NavItem[] = [
     label: 'Transactions',
     href: '/transactions',
     icon: Receipt,
+  },
+  {
+    label: 'Log Call',
+    href: '/calls/new',
+    icon: PhoneOutgoing,
+    exact: true,
+  },
+  {
+    label: 'My Calls',
+    href: '/calls',
+    icon: PhoneCall,
+  },
+  {
+    label: "Today's Tasks",
+    href: '/calls/tasks',
+    icon: ListTodo,
+    exact: true,
+  },
+  {
+    label: 'Call Approvals',
+    href: '/calls/approvals',
+    icon: PhoneForwarded,
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'Call Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
   },
   {
     label: 'Approvals',
@@ -129,8 +165,9 @@ export function Sidebar({ userRole, isOpen, onClose, pendingCount }: SidebarProp
         {/* Navigation */}
         <nav className="p-4 space-y-1">
           {filteredItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/' && pathname.startsWith(item.href));
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             const Icon = item.icon;
             const badge = item.href === '/approvals' ? pendingCount : undefined;
 

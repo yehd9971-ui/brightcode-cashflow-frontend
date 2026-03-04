@@ -7,13 +7,14 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTransactions } from '@/lib/services/transactions';
 import { TransactionStatus } from '@/types/api';
+import api from '@/lib/api';
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSalesManager } = useAuth();
 
   // Fetch pending count for admin users
   const { data: pendingData } = useQuery({
@@ -23,7 +24,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  const pendingCount = pendingData?.total || 0;
+  const { data: callPendingData } = useQuery({
+    queryKey: ['calls', 'pending-count'],
+    queryFn: async () => {
+      const res = await api.get<{ count: number }>('/calls/pending-count');
+      return res.data;
+    },
+    enabled: isAdmin || isSalesManager,
+    refetchInterval: 30000,
+  });
+
+  const pendingCount = (pendingData?.total || 0) + (callPendingData?.count || 0);
 
   return (
     <ProtectedRoute>

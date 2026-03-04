@@ -50,6 +50,15 @@ export enum AuditAction {
   ACTIVATE = 'ACTIVATE',
   CLOCK_IN = 'CLOCK_IN',
   CLOCK_OUT = 'CLOCK_OUT',
+  CALL_CREATE = 'CALL_CREATE',
+  CALL_UPDATE = 'CALL_UPDATE',
+  CALL_APPROVE = 'CALL_APPROVE',
+  CALL_REJECT = 'CALL_REJECT',
+  TASK_CREATE = 'TASK_CREATE',
+  TASK_COMPLETE = 'TASK_COMPLETE',
+  TASK_REJECT = 'TASK_REJECT',
+  TASK_OVERDUE = 'TASK_OVERDUE',
+  REPORT_GENERATE = 'REPORT_GENERATE',
 }
 
 export enum EntityType {
@@ -57,6 +66,38 @@ export enum EntityType {
   TRANSACTION = 'TRANSACTION',
   ATTACHMENT = 'ATTACHMENT',
   ATTENDANCE = 'ATTENDANCE',
+  CALL = 'CALL',
+  CALL_TASK = 'CALL_TASK',
+  DAILY_CALL_REPORT = 'DAILY_CALL_REPORT',
+}
+
+// ============================================================================
+// CALL TRACKING ENUMS
+// ============================================================================
+
+export enum CallStatus {
+  ANSWERED = 'ANSWERED',
+  NOT_ANSWERED = 'NOT_ANSWERED',
+  SUPERSEDED = 'SUPERSEDED',
+}
+
+export enum CallApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export enum CallTaskStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  REJECTED = 'REJECTED',
+  OVERDUE = 'OVERDUE',
+}
+
+export enum CallTaskSource {
+  MANUAL_SALES = 'MANUAL_SALES',
+  MANUAL_MANAGER = 'MANUAL_MANAGER',
+  FOLLOW_UP = 'FOLLOW_UP',
 }
 
 // ============================================================================
@@ -341,6 +382,158 @@ export interface AttendanceSummaryResponseDto {
 }
 
 // ============================================================================
+// CALL TRACKING TYPES
+// ============================================================================
+
+export interface CallScreenshotDto {
+  id: string;
+  filename: string;
+  originalFilename: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface CallUserDto {
+  id: string;
+  email: string;
+  role: Role;
+}
+
+export interface CallResponseDto {
+  id: string;
+  userId: string;
+  clientPhoneNumber: string;
+  rawPhoneNumber: string;
+  callStatus: CallStatus;
+  approvalStatus: CallApprovalStatus;
+  durationMinutes?: number;
+  notes?: string;
+  dateEgypt: string;
+  isCounted: boolean;
+  supersededByCallId?: string;
+  approvedByUserId?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  screenshot?: CallScreenshotDto;
+  user: CallUserDto;
+  approvedBy?: CallUserDto;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCallDto {
+  clientPhoneNumber: string;
+  callStatus: CallStatus;
+  durationMinutes?: number;
+  notes?: string;
+}
+
+export interface UpdateCallDto {
+  clientPhoneNumber?: string;
+  callStatus?: CallStatus;
+  durationMinutes?: number;
+  notes?: string;
+}
+
+export interface CallQueryDto {
+  page?: number;
+  limit?: number;
+  date?: string;
+  userId?: string;
+  callStatus?: CallStatus;
+  approvalStatus?: CallApprovalStatus;
+  phoneNumber?: string;
+  showSuperseded?: boolean;
+}
+
+export interface RejectCallDto {
+  reason: string;
+}
+
+export interface CallTaskResponseDto {
+  id: string;
+  userId: string;
+  clientPhoneNumber: string;
+  rawPhoneNumber: string;
+  taskDate: string;
+  taskTime: string;
+  scheduledAt: string;
+  status: CallTaskStatus;
+  source: CallTaskSource;
+  notes?: string;
+  createdByUserId: string;
+  completedByCallId?: string;
+  sourceCallId?: string;
+  rejectedByUserId?: string;
+  rejectionReason?: string;
+  user: CallUserDto;
+  createdBy: CallUserDto;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCallTaskDto {
+  clientPhoneNumber: string;
+  taskDate: string;
+  taskTime: string;
+  userId?: string;
+  notes?: string;
+  sourceCallId?: string;
+}
+
+export interface CallTaskQueryDto {
+  page?: number;
+  limit?: number;
+  date?: string;
+  userId?: string;
+  status?: CallTaskStatus;
+  phoneNumber?: string;
+}
+
+export interface DailyCallStatsDto {
+  totalCalls: number;
+  answeredCalls: number;
+  totalTalkMinutes: number;
+  approvedCalls: number;
+  conditionAProgress: number;
+  conditionBProgress: number;
+  completionPercent: number;
+  totalTasks: number;
+  completedTasks: number;
+  overdueTasks: number;
+}
+
+export interface EmployeeDailyStatsDto {
+  userId: string;
+  email: string;
+  stats: DailyCallStatsDto;
+}
+
+export interface DashboardStatsResponseDto {
+  date: string;
+  employees: EmployeeDailyStatsDto[];
+}
+
+export interface DailyCallReportDto {
+  id: string;
+  userId: string;
+  dateEgypt: string;
+  totalCalls: number;
+  answeredCalls: number;
+  totalTalkMinutes: number;
+  approvedCalls: number;
+  conditionAProgress: number;
+  conditionBProgress: number;
+  completionPercent: number;
+  totalTasks: number;
+  completedTasks: number;
+  overdueTasks: number;
+  generatedAt: string;
+  user: CallUserDto;
+}
+
+// ============================================================================
 // COMMON TYPES
 // ============================================================================
 
@@ -411,6 +604,8 @@ export function isPaginatedResponse<T>(response: unknown): response is Paginated
 export type TransactionList = PaginatedResponse<TransactionResponseDto>;
 export type UserList = PaginatedResponse<UserResponseDto>;
 export type AuditList = PaginatedResponse<AuditLogResponseDto>;
+export type CallList = PaginatedResponse<CallResponseDto>;
+export type CallTaskList = PaginatedResponse<CallTaskResponseDto>;
 export type ApiResponse<T> = T | ErrorResponse;
 
 // ============================================================================
