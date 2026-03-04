@@ -46,6 +46,15 @@ const actionVariants: Record<AuditAction, 'success' | 'warning' | 'error' | 'inf
   [AuditAction.ACTIVATE]: 'success',
   [AuditAction.CLOCK_IN]: 'success',
   [AuditAction.CLOCK_OUT]: 'info',
+  [AuditAction.CALL_CREATE]: 'info',
+  [AuditAction.CALL_UPDATE]: 'warning',
+  [AuditAction.CALL_APPROVE]: 'success',
+  [AuditAction.CALL_REJECT]: 'error',
+  [AuditAction.TASK_CREATE]: 'info',
+  [AuditAction.TASK_COMPLETE]: 'success',
+  [AuditAction.TASK_REJECT]: 'error',
+  [AuditAction.TASK_OVERDUE]: 'warning',
+  [AuditAction.REPORT_GENERATE]: 'info',
 };
 
 function ExpandableRow({ log }: { log: AuditLogResponseDto }) {

@@ -23,7 +23,7 @@ export default function Home() {
 
   return (
     <ProtectedRoute>
-      <AppLayout pendingCount={pendingCount}>
+      <AppLayout pendingCallCount={pendingCount}>
         <DashboardPage />
       </AppLayout>
     </ProtectedRoute>
