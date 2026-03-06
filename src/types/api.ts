@@ -499,6 +499,8 @@ export interface DailyCallStatsDto {
   conditionAProgress: number;
   conditionBProgress: number;
   completionPercent: number;
+  pendingCalls: number;
+  rejectedCalls: number;
   totalTasks: number;
   completedTasks: number;
   overdueTasks: number;
@@ -526,6 +528,8 @@ export interface DailyCallReportDto {
   conditionAProgress: number;
   conditionBProgress: number;
   completionPercent: number;
+  pendingCalls: number;
+  rejectedCalls: number;
   totalTasks: number;
   completedTasks: number;
   overdueTasks: number;

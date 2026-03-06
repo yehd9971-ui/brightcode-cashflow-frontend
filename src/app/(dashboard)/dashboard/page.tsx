@@ -71,7 +71,9 @@ export default function CallDashboardPage() {
                 <th className="text-center p-3 font-medium text-gray-600">Calls</th>
                 <th className="text-center p-3 font-medium text-gray-600">Answered</th>
                 <th className="text-center p-3 font-medium text-gray-600">Talk Time</th>
+                <th className="text-center p-3 font-medium text-gray-600">Pending</th>
                 <th className="text-center p-3 font-medium text-gray-600">Approved</th>
+                <th className="text-center p-3 font-medium text-gray-600">Rejected</th>
                 <th className="text-center p-3 font-medium text-gray-600">Tasks</th>
                 <th className="text-center p-3 font-medium text-gray-600">Completion</th>
               </tr>
@@ -83,7 +85,9 @@ export default function CallDashboardPage() {
                   <td className="p-3 text-center">{emp.stats.totalCalls}/25</td>
                   <td className="p-3 text-center">{emp.stats.answeredCalls}/10</td>
                   <td className="p-3 text-center">{emp.stats.totalTalkMinutes}/60 min</td>
-                  <td className="p-3 text-center">{emp.stats.approvedCalls}</td>
+                  <td className="p-3 text-center text-yellow-600">{emp.stats.pendingCalls}</td>
+                  <td className="p-3 text-center text-green-600">{emp.stats.approvedCalls}</td>
+                  <td className="p-3 text-center text-red-600">{emp.stats.rejectedCalls}</td>
                   <td className="p-3 text-center">{emp.stats.completedTasks}/{emp.stats.totalTasks}</td>
                   <td className="p-3 text-center">
                     <span className={cn('px-2 py-1 rounded-full text-xs font-medium', getCompletionColor(emp.stats.completionPercent))}>
