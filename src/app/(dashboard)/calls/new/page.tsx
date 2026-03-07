@@ -118,6 +118,7 @@ export default function LogCallPage() {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="01xxxxxxxxx"
             required
+            disabled={!!initialPhone}
           />
 
           <div>
