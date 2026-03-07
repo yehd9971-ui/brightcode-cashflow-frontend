@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Edit2 } from 'lucide-react';
+import { Edit2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCalls, updateCall, getMyDailyStats } from '@/lib/services/calls';
 import { getSalesUsers } from '@/lib/services/users';
@@ -182,6 +182,14 @@ export default function MyCallsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-blue-600 hover:underline">{call.rawPhoneNumber}</span>
                       <CallStatusBadge status={call.callStatus} size="sm" />
+                      {call.screenshot?.duplicateInstances && call.screenshot.duplicateInstances.length > 0 && (
+                        <div 
+                          className="bg-yellow-100 text-yellow-600 rounded-full p-1 shadow-sm border border-yellow-300 flex items-center justify-center cursor-help" 
+                          title="Warning: Identical image uploaded previously!"
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                      )}
                       <ApprovalStatusBadge status={call.approvalStatus} size="sm" />
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-500">

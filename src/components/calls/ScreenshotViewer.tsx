@@ -80,14 +80,6 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
           className="max-w-full h-40 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity" 
           onClick={() => setIsFullscreen(true)}
         />
-        {screenshot.duplicateInstances && screenshot.duplicateInstances.length > 0 && (
-          <div 
-            className="absolute top-2 left-2 bg-yellow-100 text-yellow-600 rounded-full p-1.5 shadow-sm border border-yellow-300" 
-            title="Warning: Identical image uploaded previously!"
-          >
-            <AlertTriangle className="w-5 h-5" />
-          </div>
-        )}
         <div 
           className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg"
           onClick={() => setIsFullscreen(true)}

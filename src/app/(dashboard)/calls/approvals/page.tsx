@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCallApprovals, approveCall, rejectCall } from '@/lib/services/calls';
 import { CallResponseDto, Role } from '@/types/api';
@@ -84,7 +84,17 @@ export default function CallApprovalsPage() {
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-3">
                         <span className="text-lg font-semibold text-gray-900">{call.rawPhoneNumber}</span>
-                        <CallStatusBadge status={call.callStatus} size="sm" />
+                        <div className="flex items-center gap-2">
+                          <CallStatusBadge status={call.callStatus} size="sm" />
+                          {call.screenshot?.duplicateInstances && call.screenshot.duplicateInstances.length > 0 && (
+                            <div 
+                              className="bg-yellow-100 text-yellow-600 rounded-full p-1 shadow-sm border border-yellow-300 flex items-center justify-center cursor-help" 
+                              title="Warning: Identical image uploaded previously! Click the image to view details."
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
                         <span>by {call.user.email}</span>

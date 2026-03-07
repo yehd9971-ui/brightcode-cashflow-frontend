@@ -7,7 +7,7 @@ import { CallStatusBadge, ApprovalStatusBadge } from '@/components/calls/CallSta
 import { formatDateShort } from '@/utils/formatters';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Plus } from 'lucide-react';
+import { Plus, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface CallHistoryModalProps {
@@ -63,6 +63,14 @@ export function CallHistoryModal({ isOpen, onClose, phoneNumber }: CallHistoryMo
                     <span className="text-sm font-medium text-gray-500">{formatDateShort(call.createdAt)}</span>
                     <div className="flex items-center gap-2">
                       <CallStatusBadge status={call.callStatus} size="sm" />
+                      {call.screenshot?.duplicateInstances && call.screenshot.duplicateInstances.length > 0 && (
+                        <div 
+                          className="bg-yellow-100 text-yellow-600 rounded-full p-1 shadow-sm border border-yellow-300 flex items-center justify-center cursor-help" 
+                          title="Warning: Identical image uploaded previously!"
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                      )}
                       <ApprovalStatusBadge status={call.approvalStatus} size="sm" />
                     </div>
                   </div>
