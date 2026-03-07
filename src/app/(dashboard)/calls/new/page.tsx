@@ -98,7 +98,7 @@ export default function LogCallPage() {
     }
   };
 
-  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== ''));
+  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && !!screenshot;
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -177,26 +177,49 @@ export default function LogCallPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Screenshot (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Screenshot <span className="text-red-500">*</span>
+            </label>
             {screenshot ? (
-              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                <span className="text-sm text-gray-600 flex-1 truncate">{screenshot.name}</span>
+              <div className="relative inline-block w-full">
+                {screenshot.type.startsWith('image/') ? (
+                  <div className="relative flex justify-center bg-gray-50 border rounded-lg p-2 min-h-[120px]">
+                    <img 
+                      src={URL.createObjectURL(screenshot)} 
+                      alt="Preview" 
+                      className="max-h-64 object-contain rounded" 
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-lg justify-center border">
+                    <FileText className="w-8 h-8 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-600 truncate max-w-xs">{screenshot.name}</span>
+                  </div>
+                )}
+                
                 <button
                   type="button"
                   onClick={() => { setScreenshot(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                  className="text-gray-400 hover:text-red-500"
+                  className="absolute top-2 right-2 bg-white/90 shadow rounded-full p-2 text-gray-500 hover:text-red-600 transition-colors"
+                  title="Remove screenshot"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors"
+                className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-colors flex flex-col items-center justify-center gap-2"
               >
-                <Upload className="w-4 h-4 inline mr-1" />
-                Upload Screenshot (JPEG, PNG, PDF - max 5MB)
+                <div className="bg-gray-100 p-3 rounded-full">
+                  <Upload className="w-6 h-6 text-gray-500" />
+                </div>
+                <div>
+                  <span className="font-semibold text-blue-600 hover:underline">Click to upload</span>
+                  <span className="text-gray-500"> or drag and drop</span>
+                </div>
+                <p className="text-xs text-gray-400">JPEG, PNG, PDF (max 5MB)</p>
               </button>
             )}
             <input
