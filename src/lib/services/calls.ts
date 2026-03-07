@@ -39,7 +39,7 @@ export async function createCall(
   }
 
   const response = await api.post<CallResponseDto>('/calls', formData, {
-    headers: { 'Content-Type': undefined },
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
 }
