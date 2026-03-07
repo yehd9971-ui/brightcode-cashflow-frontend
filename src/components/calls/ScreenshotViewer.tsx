@@ -73,22 +73,6 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
 
   return (
     <div className="mt-4 space-y-3">
-      {screenshot.duplicateInstances && screenshot.duplicateInstances.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex gap-2">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-yellow-500" />
-          <div>
-            <p className="font-semibold text-yellow-900 mb-1">Warning: Identical image uploaded previously!</p>
-            <ul className="list-disc pl-4 space-y-1">
-              {screenshot.duplicateInstances.map((dup, i) => (
-                <li key={i}>
-                  By {dup.userEmail} for {dup.clientPhoneNumber} on {dup.dateEgypt}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
       <div className="relative group inline-block">
         <img 
           src={blobUrl!} 
@@ -96,6 +80,14 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
           className="max-w-full h-40 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity" 
           onClick={() => setIsFullscreen(true)}
         />
+        {screenshot.duplicateInstances && screenshot.duplicateInstances.length > 0 && (
+          <div 
+            className="absolute top-2 left-2 bg-yellow-100 text-yellow-600 rounded-full p-1.5 shadow-sm border border-yellow-300" 
+            title="Warning: Identical image uploaded previously!"
+          >
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+        )}
         <div 
           className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg"
           onClick={() => setIsFullscreen(true)}
@@ -110,11 +102,26 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
         title="View Screenshot"
         size="lg" // Very large for image viewing
       >
-        <div className="flex items-center justify-center p-4 bg-gray-50/50 rounded-lg">
+        <div className="flex flex-col items-center justify-center p-4 bg-gray-50/50 rounded-lg gap-4">
+          {screenshot.duplicateInstances && screenshot.duplicateInstances.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex gap-2 w-full">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-yellow-500" />
+              <div>
+                <p className="font-semibold text-yellow-900 mb-1">Warning: Identical image uploaded previously!</p>
+                <ul className="list-disc pl-4 space-y-1">
+                  {screenshot.duplicateInstances.map((dup, i) => (
+                    <li key={i}>
+                      By {dup.userEmail} for {dup.clientPhoneNumber} on {dup.dateEgypt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           <img 
             src={blobUrl!} 
             alt={screenshot.originalFilename} 
-            className="max-w-full max-h-[80vh] object-contain rounded border shadow-sm"
+            className="max-w-full max-h-[70vh] object-contain rounded border shadow-sm"
           />
         </div>
       </Modal>

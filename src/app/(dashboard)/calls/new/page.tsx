@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Phone, Upload, X } from 'lucide-react';
+import { Phone, Upload, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCall } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
@@ -219,13 +219,13 @@ export default function LogCallPage() {
                   <span className="font-semibold text-blue-600 hover:underline">Click to upload</span>
                   <span className="text-gray-500"> or drag and drop</span>
                 </div>
-                <p className="text-xs text-gray-400">JPEG, PNG, PDF (max 5MB)</p>
+                <p className="text-xs text-gray-400">Any Image format (max 5MB)</p>
               </button>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,application/pdf"
+              accept="image/*"
               onChange={handleFileChange}
               className="hidden"
             />
