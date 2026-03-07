@@ -12,6 +12,15 @@ export async function getUsers(query?: UserQueryDto): Promise<UserList> {
   return response.data;
 }
 
+export async function getSalesUsers(): Promise<UserResponseDto[]> {
+  // We don't filter by role: 'SALES' in the query so we can retrieve both SALES and SALES_MANAGER
+  // However, the backend might need an update to handle multiple roles or we can fetch all and filter in frontend.
+  // Better approach: fetch all users (limit 100) and filter the relevant ones in frontend or change API endpoint to support arrays.
+  // We'll fetch all here and adjust the frontend component to filter them.
+  const response = await api.get<UserList>('/users', { params: { limit: 100 } });
+  return response.data.data;
+}
+
 export async function getUserById(id: string): Promise<UserResponseDto> {
   const response = await api.get<UserResponseDto>(`/users/${id}`);
   return response.data;

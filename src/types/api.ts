@@ -504,6 +504,7 @@ export interface DailyCallStatsDto {
   totalTasks: number;
   completedTasks: number;
   overdueTasks: number;
+  dynamicCallTarget: number;
 }
 
 export interface EmployeeDailyStatsDto {
@@ -533,6 +534,7 @@ export interface DailyCallReportDto {
   totalTasks: number;
   completedTasks: number;
   overdueTasks: number;
+  dynamicCallTarget: number;
   generatedAt: string;
   user: CallUserDto;
 }

@@ -82,7 +82,7 @@ export default function CallDashboardPage() {
               {data.employees.map((emp) => (
                 <tr key={emp.userId} className="border-b hover:bg-gray-50">
                   <td className="p-3 font-medium text-gray-900">{emp.email}</td>
-                  <td className="p-3 text-center">{emp.stats.totalCalls}/25</td>
+                  <td className="p-3 text-center">{emp.stats.totalCalls}/{emp.stats.dynamicCallTarget}</td>
                   <td className="p-3 text-center">{emp.stats.answeredCalls}/10</td>
                   <td className="p-3 text-center">{emp.stats.totalTalkMinutes}/60 min</td>
                   <td className="p-3 text-center text-yellow-600">{emp.stats.pendingCalls}</td>

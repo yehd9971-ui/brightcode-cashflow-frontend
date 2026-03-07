@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCalls, updateCall, getMyDailyStats } from '@/lib/services/calls';
+import { getSalesUsers } from '@/lib/services/users';
 import { CallStatus, CallApprovalStatus, UpdateCallDto } from '@/types/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/Card';
@@ -18,6 +19,7 @@ import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CallStatusBadge, ApprovalStatusBadge } from '@/components/calls/CallStatusBadge';
 import { DailyProgressCard } from '@/components/calls/DailyProgressCard';
+import { CallHistoryModal } from '@/components/calls/CallHistoryModal';
 import { formatDateShort } from '@/utils/formatters';
 
 export default function MyCallsPage() {
@@ -28,34 +30,57 @@ export default function MyCallsPage() {
   const [date, setDate] = useState(today);
   const [callStatusFilter, setCallStatusFilter] = useState('');
   const [approvalFilter, setApprovalFilter] = useState('');
-  const [showSuperseded, setShowSuperseded] = useState(false);
+  const [searchPhone, setSearchPhone] = useState('');
+  const [filterUserId, setFilterUserId] = useState('');
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const limit = 50; // Increased limit so grouping works better on a page
 
-  // Edit modal state
+  // Modals state
   const [editCallId, setEditCallId] = useState<string | null>(null);
   const [editDuration, setEditDuration] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  
+  const [historyPhone, setHistoryPhone] = useState<string | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ['calls', 'my-daily-stats', date],
     queryFn: () => getMyDailyStats(date),
   });
 
+  const { data: salesUsers } = useQuery({
+    queryKey: ['sales-users'],
+    queryFn: getSalesUsers,
+    enabled: user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER',
+  });
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['calls', { date, callStatus: callStatusFilter, approvalStatus: approvalFilter, showSuperseded, page, limit }],
+    queryKey: ['calls', { date, callStatus: callStatusFilter, approvalStatus: approvalFilter, searchPhone, filterUserId, page, limit }],
     queryFn: () => getCalls({
       date: date || undefined,
       callStatus: callStatusFilter ? callStatusFilter as CallStatus : undefined,
       approvalStatus: approvalFilter ? approvalFilter as CallApprovalStatus : undefined,
-      showSuperseded,
+      phoneNumber: searchPhone || undefined,
+      userId: filterUserId || undefined,
+      showSuperseded: false, // Always false now that history modal exists
       page,
       limit,
     }),
   });
 
-  const calls = data?.data || [];
+  const allCalls = data?.data || [];
   const totalPages = Math.ceil((data?.total || 0) / limit);
+
+  // Determine if grouping should be applied. Grouping makes most sense when NOT filtering by a single day
+  // BUT the user requirement is they want the group behavior in the Calls table period.
+  const groupedCalls = [];
+  const seenPhones = new Set();
+
+  for (const call of allCalls) {
+    if (!seenPhones.has(call.clientPhoneNumber)) {
+      seenPhones.add(call.clientPhoneNumber);
+      groupedCalls.push(call);
+    }
+  }
 
   const editMutation = useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: UpdateCallDto }) => updateCall(id, dto),
@@ -112,32 +137,50 @@ export default function MyCallsPage() {
               { value: 'REJECTED', label: 'Rejected' },
             ]}
           />
-          <label className="flex items-center gap-2 text-sm text-gray-600 pb-2">
-            <input
-              type="checkbox"
-              checked={showSuperseded}
-              onChange={(e) => setShowSuperseded(e.target.checked)}
-              className="rounded border-gray-300"
+          <Input
+            label="Search Phone"
+            type="text"
+            placeholder="01xxxxxxxxx"
+            value={searchPhone}
+            onChange={(e) => { setSearchPhone(e.target.value); setPage(1); }}
+          />
+          {(user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER') && (
+            <Select
+              label="Member"
+              value={filterUserId}
+              onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
+              options={[
+                { value: '', label: 'All Members' },
+                ...(salesUsers
+                  ?.filter(u =>
+                    user.role === 'ADMIN' ? true // Admin sees everyone fetched (Admin, Sales Mgr, Sales)
+                    : (u.role === 'SALES_MANAGER' || u.role === 'SALES') // Sales Mgr sees himself and sales team
+                  )
+                  .map((u) => ({ value: u.id, label: u.email })) || [])
+              ]}
             />
-            Show Superseded
-          </label>
+          )}
         </div>
       </Card>
 
       {/* Calls List */}
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
-      ) : calls.length === 0 ? (
+      ) : allCalls.length === 0 ? (
         <Card><EmptyState title="No calls found" description="No calls match your filters." /></Card>
       ) : (
         <>
           <div className="space-y-3">
-            {calls.map((call) => (
-              <Card key={call.id} className="p-4">
+            {groupedCalls.map((call) => (
+              <div 
+                key={call.id} 
+                className="bg-white rounded-xl shadow-sm border p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => setHistoryPhone(call.clientPhoneNumber)}
+              >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-900">{call.rawPhoneNumber}</span>
+                      <span className="font-semibold text-blue-600 hover:underline">{call.rawPhoneNumber}</span>
                       <CallStatusBadge status={call.callStatus} size="sm" />
                       <ApprovalStatusBadge status={call.approvalStatus} size="sm" />
                     </div>
@@ -150,7 +193,7 @@ export default function MyCallsPage() {
                       <p className="text-sm text-red-600">Rejection: {call.rejectionReason}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {call.approvalStatus === 'PENDING' && call.userId === user?.id && (
                       <Button variant="outline" size="sm" onClick={() => openEdit(call)}>
                         <Edit2 className="w-4 h-4" />
@@ -158,7 +201,7 @@ export default function MyCallsPage() {
                     )}
                   </div>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} loading={isFetching} total={data?.total || 0} limit={limit} />
@@ -196,6 +239,13 @@ export default function MyCallsPage() {
           </div>
         </Modal>
       )}
+
+      {/* History Modal */}
+      <CallHistoryModal
+        isOpen={!!historyPhone}
+        onClose={() => setHistoryPhone(null)}
+        phoneNumber={historyPhone || ''}
+      />
     </div>
   );
 }

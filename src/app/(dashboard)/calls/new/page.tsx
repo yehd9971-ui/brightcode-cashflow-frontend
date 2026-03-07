@@ -96,7 +96,7 @@ export default function LogCallPage() {
     }
   };
 
-  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0));
+  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== ''));
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -160,13 +160,18 @@ export default function LogCallPage() {
             />
           )}
 
-          <Textarea
-            label="Notes (optional)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Call notes..."
-            maxLength={1000}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes {callStatus === CallStatus.ANSWERED && <span className="text-red-500">*</span>}
+            </label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Call notes..."
+              maxLength={1000}
+              required={callStatus === CallStatus.ANSWERED}
+            />
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Screenshot (optional)</label>
