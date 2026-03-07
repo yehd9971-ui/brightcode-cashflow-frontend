@@ -392,6 +392,13 @@ export interface CallScreenshotDto {
   mimeType: string;
   size: number;
   uploadedAt: string;
+  fileHash?: string;
+  duplicateInstances?: {
+    callId: string;
+    clientPhoneNumber: string;
+    dateEgypt: string;
+    userEmail: string;
+  }[];
 }
 
 export interface CallUserDto {

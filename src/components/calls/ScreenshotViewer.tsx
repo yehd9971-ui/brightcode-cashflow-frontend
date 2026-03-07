@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Image as ImageIcon, FileText, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, FileText, Loader2, Maximize2, AlertTriangle } from 'lucide-react';
 import { getCallScreenshot } from '@/lib/services/calls';
 import { CallScreenshotDto } from '@/types/api';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 
 interface ScreenshotViewerProps {
   screenshot: CallScreenshotDto;
@@ -14,6 +15,7 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const loadScreenshot = async () => {
     setLoading(true);
@@ -70,8 +72,52 @@ export function ScreenshotViewer({ screenshot }: ScreenshotViewerProps) {
   }
 
   return (
-    <div className="mt-2">
-      <img src={blobUrl!} alt={screenshot.originalFilename} className="max-w-full max-h-64 rounded-lg border" />
+    <div className="mt-4 space-y-3">
+      {screenshot.duplicateInstances && screenshot.duplicateInstances.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex gap-2">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-yellow-500" />
+          <div>
+            <p className="font-semibold text-yellow-900 mb-1">Warning: Identical image uploaded previously!</p>
+            <ul className="list-disc pl-4 space-y-1">
+              {screenshot.duplicateInstances.map((dup, i) => (
+                <li key={i}>
+                  By {dup.userEmail} for {dup.clientPhoneNumber} on {dup.dateEgypt}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div className="relative group inline-block">
+        <img 
+          src={blobUrl!} 
+          alt={screenshot.originalFilename} 
+          className="max-w-full h-40 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity" 
+          onClick={() => setIsFullscreen(true)}
+        />
+        <div 
+          className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-lg"
+          onClick={() => setIsFullscreen(true)}
+        >
+          <Maximize2 className="w-8 h-8 text-white" />
+        </div>
+      </div>
+
+      <Modal
+        isOpen={isFullscreen}
+        onClose={() => setIsFullscreen(false)}
+        title="View Screenshot"
+        size="lg" // Very large for image viewing
+      >
+        <div className="flex items-center justify-center p-4 bg-gray-50/50 rounded-lg">
+          <img 
+            src={blobUrl!} 
+            alt={screenshot.originalFilename} 
+            className="max-w-full max-h-[80vh] object-contain rounded border shadow-sm"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }
