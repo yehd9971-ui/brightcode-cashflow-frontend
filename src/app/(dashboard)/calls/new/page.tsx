@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, Upload, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,11 +16,13 @@ import { FollowUpPrompt } from '@/components/calls/FollowUpPrompt';
 import { validateFile } from '@/types/api';
 
 export default function LogCallPage() {
+  const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [phone, setPhone] = useState('');
+  const initialPhone = searchParams.get('phone') || '';
+  const [phone, setPhone] = useState(initialPhone);
   const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.ANSWERED);
   const [duration, setDuration] = useState('');
   const [notes, setNotes] = useState('');
