@@ -79,12 +79,13 @@ export default function CallApprovalsPage() {
 
   // History tab state
   const [historyPage, setHistoryPage] = useState(1);
-  const [historyFilter, setHistoryFilter] = useState<string>('APPROVED');
+  const [historyFilter, setHistoryFilter] = useState<CallApprovalStatus>(CallApprovalStatus.APPROVED);
   const [historyUserId, setHistoryUserId] = useState('');
 
-  const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ['calls', 'history', { page: historyPage, limit, approvalStatus: historyFilter || undefined, userId: historyUserId || undefined }],
-    queryFn: () => getCalls({ page: historyPage, limit, approvalStatus: (historyFilter || undefined) as CallApprovalStatus | undefined, userId: historyUserId || undefined }),
+  // Fetch approved/rejected call history
+  const { data: historyData, isLoading: historyLoading, isError: isHistoryError, refetch: refetchHistory, isFetching: historyFetching } = useQuery({
+    queryKey: ['calls', 'history', { page: historyPage, limit, approvalStatus: historyFilter, userId: historyUserId || undefined }],
+    queryFn: () => getCalls({ page: historyPage, limit, approvalStatus: historyFilter, userId: historyUserId || undefined }),
     enabled: activeTab === 'history',
   });
   const historyCalls = historyData?.data || [];
@@ -240,12 +241,12 @@ export default function CallApprovalsPage() {
             Not Interested ({niPending.length})
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => { setActiveTab('history'); setHistoryPage(1); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'history' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            History
+            History ({historyData?.total ?? '...'})
           </button>
         </div>
 
@@ -258,11 +259,10 @@ export default function CallApprovalsPage() {
                   <Select
                     label="Status"
                     value={historyFilter}
-                    onChange={(e) => { setHistoryFilter(e.target.value); setHistoryPage(1); }}
+                    onChange={(e) => { setHistoryFilter(e.target.value as CallApprovalStatus); setHistoryPage(1); }}
                     options={[
-                      { value: '', label: 'All' },
-                      { value: 'APPROVED', label: 'Approved' },
-                      { value: 'REJECTED', label: 'Rejected' },
+                      { value: CallApprovalStatus.APPROVED, label: 'Approved' },
+                      { value: CallApprovalStatus.REJECTED, label: 'Rejected' },
                     ]}
                   />
                 </div>
@@ -281,6 +281,8 @@ export default function CallApprovalsPage() {
 
             {historyLoading ? (
               <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
+            ) : isHistoryError ? (
+              <ErrorState message="Unable to load call history" onRetry={refetchHistory} />
             ) : historyCalls.length === 0 ? (
               <Card><EmptyState title="No calls found" description="No approved or rejected calls match your filters." /></Card>
             ) : (
@@ -295,10 +297,8 @@ export default function CallApprovalsPage() {
                             <CallStatusBadge status={call.callStatus} size="sm" />
                             {call.approvalStatus === 'APPROVED' ? (
                               <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800">Approved</span>
-                            ) : call.approvalStatus === 'REJECTED' ? (
-                              <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">Rejected</span>
                             ) : (
-                              <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">Rejected</span>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
@@ -317,7 +317,7 @@ export default function CallApprovalsPage() {
                     </Card>
                   ))}
                 </div>
-                <Pagination currentPage={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage} total={historyData?.total || 0} limit={limit} />
+                <Pagination currentPage={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage} loading={historyFetching} total={historyData?.total || 0} limit={limit} />
               </>
             )}
           </>
