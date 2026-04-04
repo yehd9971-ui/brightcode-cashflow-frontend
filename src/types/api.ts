@@ -260,6 +260,7 @@ export interface CreateTransactionDto {
   category?: TransactionCategory;
   customerName?: string;
   phoneNumber?: string;
+  clientId?: string;
 }
 
 export interface UpdateTransactionDto {

@@ -162,7 +162,7 @@ export default function ClientsPage() {
             )}
           </div>
           {data && data.total > 20 && (
-            <div className="p-4"><Pagination page={page} totalPages={Math.ceil(data.total / 20)} onPageChange={setPage} /></div>
+            <div className="p-4"><Pagination currentPage={page} totalPages={Math.ceil(data.total / 20)} onPageChange={setPage} /></div>
           )}
         </Card>
       )}

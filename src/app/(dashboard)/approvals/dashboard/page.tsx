@@ -318,8 +318,8 @@ export default function ApprovalDashboardPage() {
                         </p>
                         <p className="text-sm text-gray-500">
                           by {deal.user?.email || deal.userId}
-                          {deal.clientNumber?.phoneNumber && ` &middot; Client: ${deal.clientNumber.phoneNumber}`}
-                          {deal.clientNumber?.clientName && ` (${deal.clientNumber.clientName})`}
+                          {deal.phoneNumber && ` &middot; Client: ${deal.phoneNumber}`}
+                          {deal.clientName && ` (${deal.clientName})`}
                           {' &middot; '}{formatEgyptDateTime(deal.createdAt)}
                         </p>
                         {deal.notes && <p className="text-sm text-gray-600 mt-1">{deal.notes}</p>}

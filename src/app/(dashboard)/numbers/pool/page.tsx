@@ -193,7 +193,7 @@ export default function NumberPoolPage() {
           </div>
           {numbers && numbers.total > 20 && (
             <div className="p-4">
-              <Pagination page={page} totalPages={Math.ceil(numbers.total / 20)} onPageChange={setPage} />
+              <Pagination currentPage={page} totalPages={Math.ceil(numbers.total / 20)} onPageChange={setPage} />
             </div>
           )}
         </Card>
