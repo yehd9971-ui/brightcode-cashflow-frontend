@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText } from 'lucide-react';
+import { FileText, Eye } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getDashboardStats, generateEndOfDayReport } from '@/lib/services/calls';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +21,7 @@ import { Role } from '@/types/api';
 export default function CallDashboardPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
 
@@ -87,8 +89,18 @@ export default function CallDashboardPage() {
             </thead>
             <tbody>
               {data.employees.map((emp) => (
-                <tr key={emp.userId} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium text-gray-900">{emp.email}</td>
+                <tr
+                  key={emp.userId}
+                  className="border-b hover:bg-blue-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/calls?userId=${emp.userId}&date=${date}`)}
+                >
+                  <td className="p-3 font-medium text-gray-900 flex items-center gap-2">
+                    {emp.email}
+                    {emp.isModerator && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">M</span>
+                    )}
+                    <Eye className="w-3.5 h-3.5 text-gray-400" />
+                  </td>
                   <td className="p-3 text-center">{emp.stats.totalCalls}/{emp.stats.dynamicCallTarget}</td>
                   <td className="p-3 text-center">{emp.stats.answeredCalls}/10</td>
                   <td className="p-3 text-center">{emp.stats.totalTalkMinutes}/60 min</td>

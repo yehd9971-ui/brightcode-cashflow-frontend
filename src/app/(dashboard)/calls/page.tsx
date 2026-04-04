@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Edit2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -26,13 +27,14 @@ import { formatDateShort } from '@/utils/formatters';
 export default function MyCallsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
 
   const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(searchParams.get('date') || today);
   const [callStatusFilter, setCallStatusFilter] = useState('');
   const [approvalFilter, setApprovalFilter] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
-  const [filterUserId, setFilterUserId] = useState('');
+  const [filterUserId, setFilterUserId] = useState(searchParams.get('userId') || '');
   const [page, setPage] = useState(1);
   const limit = 50; // Increased limit so grouping works better on a page
 
@@ -178,7 +180,7 @@ export default function MyCallsPage() {
             {groupedCalls.map((call) => (
               <div
                 key={call.id}
-                className="bg-white rounded-xl shadow-sm border p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                className={`bg-white rounded-xl shadow-sm border p-4 cursor-pointer hover:bg-gray-50 transition-colors ${call.approvalStatus === 'REJECTED' ? 'border-l-4 border-l-red-400' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => setHistoryPhone(call.clientPhoneNumber)}
@@ -204,8 +206,8 @@ export default function MyCallsPage() {
                       <span>{formatDateShort(call.createdAt)}</span>
                       {call.notes && <span className="truncate max-w-xs">{call.notes}</span>}
                     </div>
-                    {call.rejectionReason && (
-                      <p className="text-sm text-red-600">Rejection: {call.rejectionReason}</p>
+                    {call.approvalStatus === 'REJECTED' && (
+                      <p className="text-sm text-red-600 font-medium">Rejected — tap for details</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
