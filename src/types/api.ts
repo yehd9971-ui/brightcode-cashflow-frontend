@@ -621,6 +621,7 @@ export interface DailyCallStatsDto {
 export interface EmployeeDailyStatsDto {
   userId: string;
   email: string;
+  isModerator?: boolean;
   stats: DailyCallStatsDto;
 }
 
