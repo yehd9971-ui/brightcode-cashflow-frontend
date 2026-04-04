@@ -36,7 +36,7 @@ import type { ClientNumberDto, AddNumberDto, CallTaskResponseDto } from '@/types
 import { startCall, getMyCallStatus } from '@/lib/services/users';
 import { getNeedsRetry } from '@/lib/services/calls';
 import { useRouter } from 'next/navigation';
-import { Phone, Plus, ArrowRight, PhoneCall, FileText, Clock, CalendarPlus, CheckCircle, ThumbsDown } from 'lucide-react';
+import { Phone, Plus, ArrowRight, PhoneCall, FileText, Clock, CalendarPlus, CheckCircle, ThumbsDown, AlertTriangle } from 'lucide-react';
 
 // Get today's Egypt date as YYYY-MM-DD
 function getTodayEgypt(): string {
@@ -392,6 +392,31 @@ export default function NumbersPage() {
                 <FileText className="w-4 h-4 mr-2" /> Fill Report
               </Button>
             </div>
+          )}
+
+          {/* Uncalled Numbers Blocking Pull */}
+          {uncalledNumbers.length > 0 && (
+            <Card title={`Must Call First (${uncalledNumbers.length})`}>
+              <div className="p-3 bg-red-50 border-b border-red-200 text-sm text-red-800">
+                You must call these numbers before pulling a new one from the pool.
+              </div>
+              <div className="divide-y divide-gray-100">
+                {uncalledNumbers.map((num) => (
+                  <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                      <div>
+                        <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
+                          {num.phoneNumber}
+                        </button>
+                        {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
+                      </div>
+                    </div>
+                    {renderCallButton(num.phoneNumber)}
+                  </div>
+                ))}
+              </div>
+            </Card>
           )}
 
           {/* New Numbers (pulled/added today, not yet called) */}
