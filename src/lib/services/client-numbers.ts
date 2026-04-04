@@ -86,8 +86,8 @@ export async function markNotInterested(numberId: string): Promise<ClientNumberD
 }
 
 export async function getNiPending(): Promise<ClientNumberDto[]> {
-  const response = await api.get<ClientNumberDto[]>('/client-numbers/ni-pending');
-  return response.data;
+  const response = await api.get<{ data: ClientNumberDto[] }>('/client-numbers/ni-pending');
+  return response.data.data;
 }
 
 export async function approveNi(numberId: string): Promise<ClientNumberDto> {
