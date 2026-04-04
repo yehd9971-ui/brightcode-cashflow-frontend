@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,7 +16,7 @@ import {
   logout as logoutService,
   refreshAccessToken,
 } from '@/lib/services/auth';
-import { setAccessToken, getRefreshToken, clearTokens } from '@/lib/api';
+import { setAccessToken, clearTokens } from '@/lib/api';
 
 interface AuthState {
   user: UserResponseDto | null;
@@ -44,33 +45,63 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated: false,
     isLoading: true,
   });
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
-  // Initialize auth state from stored refresh token
+  // Schedule proactive token refresh
+  const scheduleTokenRefresh = useCallback(
+    (expiresIn: number) => {
+      // Clear any existing timer
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+
+      // Refresh 2 minutes before expiry
+      const refreshTime = (expiresIn - 120) * 1000;
+
+      if (refreshTime > 0) {
+        refreshTimerRef.current = setTimeout(async () => {
+          try {
+            const response = await refreshAccessToken();
+            setState((prev) => ({
+              ...prev,
+              user: response.user,
+            }));
+            // Schedule next refresh
+            scheduleTokenRefresh(response.expiresIn);
+          } catch {
+            // Refresh failed, logout user
+            clearTokens();
+            setState({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+            router.push('/login');
+          }
+        }, refreshTime);
+      }
+    },
+    [router],
+  );
+
+  // Initialize auth state — always attempt refresh (cookie sent automatically)
   useEffect(() => {
     const initAuth = async () => {
-      const refreshToken = getRefreshToken();
+      try {
+        const response = await refreshAccessToken();
+        setState({
+          user: response.user,
+          isAuthenticated: true,
+          isLoading: false,
+        });
 
-      if (refreshToken) {
-        try {
-          const response = await refreshAccessToken();
-          setState({
-            user: response.user,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-
-          // Schedule token refresh 2 minutes before expiry
-          scheduleTokenRefresh(response.expiresIn);
-        } catch {
-          // Token refresh failed, clear tokens
-          clearTokens();
-          setState({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          });
-        }
-      } else {
+        // Schedule token refresh 2 minutes before expiry
+        scheduleTokenRefresh(response.expiresIn);
+      } catch {
+        // No valid session — not an error, user may be on login page
+        clearTokens();
         setState({
           user: null,
           isAuthenticated: false,
@@ -80,14 +111,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     initAuth();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cross-tab logout synchronization
+  // Cross-tab logout synchronization via BroadcastChannel
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      // Detect when refreshToken is removed in another tab
-      if (e.key === 'refreshToken' && !e.newValue && e.oldValue) {
-        // Token was removed, logout this tab
+    if (typeof BroadcastChannel === 'undefined') return;
+
+    const channel = new BroadcastChannel('auth');
+    broadcastChannelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'logout') {
+        clearTokens();
         setState({
           user: null,
           isAuthenticated: false,
@@ -97,41 +132,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    // Listen for storage changes (cross-tab communication)
-    window.addEventListener('storage', handleStorageChange);
-
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      channel.close();
+      broadcastChannelRef.current = null;
     };
-  }, [router]);
-
-  // Schedule proactive token refresh
-  const scheduleTokenRefresh = useCallback((expiresIn: number) => {
-    // Refresh 2 minutes before expiry
-    const refreshTime = (expiresIn - 120) * 1000;
-
-    if (refreshTime > 0) {
-      setTimeout(async () => {
-        try {
-          const response = await refreshAccessToken();
-          setState((prev) => ({
-            ...prev,
-            user: response.user,
-          }));
-          // Schedule next refresh
-          scheduleTokenRefresh(response.expiresIn);
-        } catch {
-          // Refresh failed, logout user
-          clearTokens();
-          setState({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          });
-          router.push('/login');
-        }
-      }, refreshTime);
-    }
   }, [router]);
 
   const login = useCallback(
@@ -155,11 +159,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw error;
       }
     },
-    [scheduleTokenRefresh]
+    [scheduleTokenRefresh],
   );
 
   const logout = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true }));
+
+    // Clear refresh timer before logout
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
 
     try {
       await logoutService();
@@ -171,6 +181,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated: false,
         isLoading: false,
       });
+
+      // Broadcast logout to other tabs
+      broadcastChannelRef.current?.postMessage({ type: 'logout' });
+
       router.push('/login');
     }
   }, [router]);

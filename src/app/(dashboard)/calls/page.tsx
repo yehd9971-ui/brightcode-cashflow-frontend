@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { CallStatusBadge, ApprovalStatusBadge } from '@/components/calls/CallStatusBadge';
 import { DailyProgressCard } from '@/components/calls/DailyProgressCard';
 import { CallHistoryModal } from '@/components/calls/CallHistoryModal';
@@ -53,7 +54,7 @@ export default function MyCallsPage() {
     enabled: user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER',
   });
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['calls', { date, callStatus: callStatusFilter, approvalStatus: approvalFilter, searchPhone, filterUserId, page, limit }],
     queryFn: () => getCalls({
       date: date || undefined,
@@ -87,6 +88,7 @@ export default function MyCallsPage() {
     onSuccess: () => {
       toast.success('Call updated');
       queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
       setEditCallId(null);
     },
     onError: () => toast.error('Failed to update call'),
@@ -166,16 +168,21 @@ export default function MyCallsPage() {
       {/* Calls List */}
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
+      ) : isError ? (
+        <ErrorState message="Unable to load data" onRetry={refetch} />
       ) : allCalls.length === 0 ? (
         <Card><EmptyState title="No calls found" description="No calls match your filters." /></Card>
       ) : (
         <>
           <div className="space-y-3">
             {groupedCalls.map((call) => (
-              <div 
-                key={call.id} 
+              <div
+                key={call.id}
                 className="bg-white rounded-xl shadow-sm border p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                role="button"
+                tabIndex={0}
                 onClick={() => setHistoryPhone(call.clientPhoneNumber)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHistoryPhone(call.clientPhoneNumber); } }}
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="space-y-1">
@@ -203,7 +210,7 @@ export default function MyCallsPage() {
                   </div>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {call.approvalStatus === 'PENDING' && call.userId === user?.id && (
-                      <Button variant="outline" size="sm" onClick={() => openEdit(call)}>
+                      <Button variant="outline" size="sm" onClick={() => openEdit(call)} aria-label="Edit call">
                         <Edit2 className="w-4 h-4" />
                       </Button>
                     )}

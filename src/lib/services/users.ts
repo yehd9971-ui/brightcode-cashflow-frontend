@@ -45,3 +45,18 @@ export async function deactivateUser(id: string): Promise<UserResponseDto> {
   const response = await api.post<UserResponseDto>(`/users/${id}/deactivate`);
   return response.data;
 }
+
+export async function startCall(phone?: string): Promise<{ status: string; callStartedAt: string }> {
+  const response = await api.post('/users/start-call', { phone });
+  return response.data;
+}
+
+export async function getMyCallStatus(): Promise<{ currentStatus: string | null; currentCallPhone: string | null }> {
+  const response = await api.get('/users/my-call-status');
+  return response.data;
+}
+
+export async function getSalesStatus(): Promise<{ employees: Array<{ userId: string; email: string; currentStatus: string | null; statusUpdatedAt: string | null; callStartedAt: string | null; durationSeconds: number }> }> {
+  const response = await api.get('/users/sales-status');
+  return response.data;
+}

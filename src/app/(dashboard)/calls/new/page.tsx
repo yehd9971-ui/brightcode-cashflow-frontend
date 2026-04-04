@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Upload, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { createCall } from '@/lib/services/calls';
+import { createCall, getNeedsRetry } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
+import { markNotInterested, getMyNumbers } from '@/lib/services/client-numbers';
 import { CallStatus } from '@/types/api';
+import { normalizePhoneNumber } from '@/utils/phone';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -30,6 +32,26 @@ export default function LogCallPage() {
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [lastCallPhone, setLastCallPhone] = useState('');
 
+  const previewUrl = useMemo(() => {
+    if (screenshot && screenshot.type.startsWith('image/')) {
+      return URL.createObjectURL(screenshot);
+    }
+    return null;
+  }, [screenshot]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  // Check if this phone has a first NOT_ANSWERED today (making this the 2nd attempt)
+  const { data: retryList } = useQuery({
+    queryKey: ['calls', 'needs-retry'],
+    queryFn: getNeedsRetry,
+  });
+  const isSecondAttempt = retryList?.some(c => normalizePhoneNumber(c.clientPhoneNumber) === normalizePhoneNumber(phone)) ?? false;
+
   const createMutation = useMutation({
     mutationFn: () => createCall(
       {
@@ -41,16 +63,29 @@ export default function LogCallPage() {
       screenshot || undefined,
     ),
     onSuccess: (data) => {
-      toast.success('Call logged successfully');
+      if (data.lateReportPenalty && data.lateReportPenalty > 0) {
+        toast.error(
+          `Late report penalty: ${data.lateReportPenalty} EGP deducted (${data.lateReportDelayMinutes} min delay, ${data.lateReportPenaltyMinutes} min over 3-min grace)`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success('Call logged successfully');
+      }
       queryClient.invalidateQueries({ queryKey: ['calls'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
+      queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-completions'] });
 
-      // Show follow-up prompt for answered calls
+      // Show follow-up prompt for answered calls, then redirect
       if (callStatus === CallStatus.ANSWERED) {
         setLastCallPhone(phone);
         setShowFollowUp(true);
       } else {
-        resetForm();
+        router.push('/numbers');
       }
     },
     onError: (error: any) => {
@@ -71,10 +106,36 @@ export default function LogCallPage() {
       toast.success('Follow-up task created');
       queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
       setShowFollowUp(false);
-      resetForm();
+      router.push('/numbers');
     },
     onError: () => {
       toast.error('Failed to create follow-up task');
+    },
+  });
+
+  // Find the ClientNumber ID for NI marking
+  const { data: myNumbersData } = useQuery({
+    queryKey: ['my-numbers'],
+    queryFn: () => getMyNumbers({ page: 1, limit: 100 }),
+  });
+
+  const notInterestedMutation = useMutation({
+    mutationFn: () => {
+      const cn = myNumbersData?.data.find(
+        (n) => normalizePhoneNumber(n.normalizedPhone) === normalizePhoneNumber(lastCallPhone)
+      );
+      if (!cn) throw new Error('Number not found in your assigned list');
+      return markNotInterested(cn.id);
+    },
+    onSuccess: () => {
+      toast.success('Marked as not interested (pending approval)');
+      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      queryClient.invalidateQueries({ queryKey: ['ni-pending'] });
+      setShowFollowUp(false);
+      router.push('/numbers');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed');
     },
   });
 
@@ -98,7 +159,10 @@ export default function LogCallPage() {
     }
   };
 
-  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && !!screenshot;
+  // Screenshot required for: Answered calls (always) and second Not Answered attempt
+  // First Not Answered: no screenshot, hidden entirely
+  const screenshotRequired = callStatus === CallStatus.ANSWERED || (callStatus === CallStatus.NOT_ANSWERED && isSecondAttempt);
+  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && (screenshotRequired ? !!screenshot : true);
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -176,18 +240,19 @@ export default function LogCallPage() {
             />
           </div>
 
+          {screenshotRequired && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Screenshot <span className="text-red-500">*</span>
             </label>
             {screenshot ? (
               <div className="relative inline-block w-full">
-                {screenshot.type.startsWith('image/') ? (
+                {previewUrl ? (
                   <div className="relative flex justify-center bg-gray-50 border rounded-lg p-2 min-h-[120px]">
-                    <img 
-                      src={URL.createObjectURL(screenshot)} 
-                      alt="Preview" 
-                      className="max-h-64 object-contain rounded" 
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="max-h-64 object-contain rounded"
                     />
                   </div>
                 ) : (
@@ -196,7 +261,7 @@ export default function LogCallPage() {
                     <span className="text-sm font-medium text-gray-600 truncate max-w-xs">{screenshot.name}</span>
                   </div>
                 )}
-                
+
                 <button
                   type="button"
                   onClick={() => { setScreenshot(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
@@ -230,6 +295,7 @@ export default function LogCallPage() {
               className="hidden"
             />
           </div>
+          )}
 
           <Button type="submit" className="w-full" loading={createMutation.isPending} disabled={!canSubmit}>
             Log Call
@@ -239,8 +305,10 @@ export default function LogCallPage() {
 
       <FollowUpPrompt
         isOpen={showFollowUp}
-        onClose={() => { setShowFollowUp(false); resetForm(); }}
+        onClose={() => { setShowFollowUp(false); router.push('/numbers'); }}
         onSubmit={(data) => followUpMutation.mutate(data)}
+        onNotInterested={() => notInterestedMutation.mutate()}
+        notInterestedLoading={notInterestedMutation.isPending}
         clientPhoneNumber={lastCallPhone}
         loading={followUpMutation.isPending}
       />

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { cn } from '@/utils/cn';
 
@@ -69,6 +70,14 @@ function ExpandableRow({ log }: { log: AuditLogResponseDto }) {
           hasSnapshots && 'border-b-0'
         )}
         onClick={() => hasSnapshots && setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && hasSnapshots) {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
       >
         <td className="px-4 py-3 text-sm text-gray-500">
           {formatDate(log.timestamp)}
@@ -133,7 +142,7 @@ export default function AuditPage() {
 
   const limit = 50;
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['audit', { page, entityType, action, startDate, endDate }],
     queryFn: () =>
       getAuditLogs({
@@ -202,7 +211,9 @@ export default function AuditPage() {
 
         {/* Audit Logs Table */}
         <Card padding="none">
-          {isLoading ? (
+          {isError ? (
+            <ErrorState message="Unable to load data" onRetry={refetch} />
+          ) : isLoading ? (
             <div className="p-4">
               <TableSkeleton rows={10} />
             </div>

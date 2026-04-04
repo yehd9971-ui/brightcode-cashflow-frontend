@@ -21,6 +21,11 @@ export async function getCallTaskById(id: string): Promise<CallTaskResponseDto> 
   return response.data;
 }
 
+export async function getTodayCallTasks(): Promise<CallTaskResponseDto[]> {
+  const response = await api.get<CallTaskResponseDto[]>('/call-tasks/today');
+  return response.data;
+}
+
 export async function rejectCallTask(
   id: string,
   data: { reason: string }

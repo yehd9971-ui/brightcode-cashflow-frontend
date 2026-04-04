@@ -98,6 +98,97 @@ export enum CallTaskSource {
   MANUAL_SALES = 'MANUAL_SALES',
   MANUAL_MANAGER = 'MANUAL_MANAGER',
   FOLLOW_UP = 'FOLLOW_UP',
+  FOLLOW_UP_AUTO = 'FOLLOW_UP_AUTO',
+}
+
+// ============================================================================
+// SALARY & DEDUCTIONS ENUMS
+// ============================================================================
+
+export enum WeeklyOffDay {
+  FRIDAY = 'FRIDAY',
+  MONDAY = 'MONDAY',
+}
+
+export enum DayStatus {
+  FULL = 'FULL',
+  PARTIAL = 'PARTIAL',
+  ABSENT = 'ABSENT',
+  LEAVE_PAID = 'LEAVE_PAID',
+  LEAVE_UNPAID = 'LEAVE_UNPAID',
+  ABSENT_UNEXCUSED = 'ABSENT_UNEXCUSED',
+}
+
+export enum DeductionType {
+  ABSENCE_UNEXCUSED = 'ABSENCE_UNEXCUSED',
+  MISSING_CALLS = 'MISSING_CALLS',
+  MANUAL = 'MANUAL',
+  LATE_REPORT = 'LATE_REPORT',
+}
+
+export enum BonusType {
+  MANUAL = 'MANUAL',
+  COMMISSION = 'COMMISSION',
+}
+
+// ============================================================================
+// NUMBER/CRM ENUMS
+// ============================================================================
+
+export enum LeadStatus {
+  NEW = 'NEW',
+  INTERESTED = 'INTERESTED',
+  FOLLOWING_UP = 'FOLLOWING_UP',
+  SOLD = 'SOLD',
+  NOT_INTERESTED = 'NOT_INTERESTED',
+}
+
+export enum NumberPoolStatus {
+  AVAILABLE = 'AVAILABLE',
+  ASSIGNED = 'ASSIGNED',
+  RESERVED = 'RESERVED',
+  ARCHIVED = 'ARCHIVED',
+  COOLING_DOWN = 'COOLING_DOWN',
+  FROZEN = 'FROZEN',
+}
+
+// ============================================================================
+// SALES STATUS ENUM
+// ============================================================================
+
+export enum SalesStatus {
+  AVAILABLE = 'AVAILABLE',
+  ON_CALL = 'ON_CALL',
+}
+
+export enum FollowUpStatus {
+  PENDING_FOLLOWUP = 'PENDING_FOLLOWUP',
+  COMPLETED_FOLLOWUP = 'COMPLETED_FOLLOWUP',
+  MISSED = 'MISSED',
+  CANCELLED = 'CANCELLED',
+}
+
+// ============================================================================
+// LEAVE ENUMS
+// ============================================================================
+
+export enum LeaveStatus {
+  PENDING_LEAVE = 'PENDING_LEAVE',
+  APPROVED_PAID = 'APPROVED_PAID',
+  APPROVED_UNPAID = 'APPROVED_UNPAID',
+  REJECTED_LEAVE = 'REJECTED_LEAVE',
+}
+
+// ============================================================================
+// DEAL ENUMS
+// ============================================================================
+
+export enum DealStatus {
+  PENDING_DEAL = 'PENDING_DEAL',
+  APPROVED_DEAL = 'APPROVED_DEAL',
+  CLOSED = 'CLOSED',
+  LOST = 'LOST',
+  REJECTED_DEAL = 'REJECTED_DEAL',
 }
 
 // ============================================================================
@@ -118,6 +209,8 @@ export interface UserResponseDto {
   email: string;
   role: Role;
   isActive: boolean;
+  baseSalary?: string;
+  weeklyOffDay?: WeeklyOffDay;
   createdAt: string;
   updatedAt: string;
 }
@@ -137,12 +230,16 @@ export interface CreateUserDto {
   email: string;
   password: string;
   role?: Role;
+  baseSalary?: number;
+  weeklyOffDay?: WeeklyOffDay;
 }
 
 export interface UpdateUserDto {
   role?: Role;
   isActive?: boolean;
   password?: string;
+  baseSalary?: number;
+  weeklyOffDay?: WeeklyOffDay;
 }
 
 export interface UserQueryDto {
@@ -425,6 +522,10 @@ export interface CallResponseDto {
   screenshot?: CallScreenshotDto;
   user: CallUserDto;
   approvedBy?: CallUserDto;
+  callStartedAt?: string;
+  lateReportPenalty?: number;
+  lateReportDelayMinutes?: number;
+  lateReportPenaltyMinutes?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -547,6 +648,284 @@ export interface DailyCallReportDto {
 }
 
 // ============================================================================
+// SALARY TYPES
+// ============================================================================
+
+export interface DailyWorkRecordDto {
+  id: string;
+  userId: string;
+  dateEgypt: string;
+  totalMinutes: number;
+  dayStatus: DayStatus;
+  dayPercentage: number;
+  salaryEarned: string;
+  callDeduction: string;
+  adminOverride: boolean;
+  adminNotes?: string;
+}
+
+export interface SalaryDeductionDto {
+  id: string;
+  userId: string;
+  dateEgypt: string;
+  type: DeductionType;
+  amount: string;
+  description: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface SalaryBonusDto {
+  id: string;
+  userId: string;
+  month: number;
+  year: number;
+  type: BonusType;
+  amount: string;
+  description: string;
+  referenceId?: string;
+  createdAt: string;
+}
+
+export interface MonthlySalaryResponseDto {
+  userId: string;
+  month: number;
+  year: number;
+  baseSalary: string;
+  dailyRecords: DailyWorkRecordDto[];
+  totalDaysWorked: number;
+  totalEarned: string;
+  totalCallDeductions: string;
+  totalAbsenceDeductions: string;
+  totalManualDeductions: string;
+  totalLateReportDeductions: string;
+  totalBonuses: string;
+  totalCommission: string;
+  netSalary: string;
+  deductions: SalaryDeductionDto[];
+  bonuses: SalaryBonusDto[];
+}
+
+export interface EmployeeSalaryOverviewDto {
+  userId: string;
+  email: string;
+  baseSalary: string;
+  totalEarned: string;
+  totalDeductions: string;
+  totalBonuses: string;
+  netSalary: string;
+  daysWorked: number;
+}
+
+export interface CreateDeductionDto {
+  userId: string;
+  amount: number;
+  description: string;
+  dateEgypt: string;
+}
+
+export interface OverrideDayRecordDto {
+  dayPercentage: number;
+  adminNotes?: string;
+}
+
+// ============================================================================
+// CLIENT NUMBER / CRM TYPES
+// ============================================================================
+
+export interface ClientNumberDto {
+  id: string;
+  phoneNumber: string;
+  normalizedPhone: string;
+  clientName?: string;
+  source?: string;
+  interests?: string;
+  leadStatus: LeadStatus;
+  currentAssigneeId?: string;
+  assignmentType?: string;
+  poolStatus: NumberPoolStatus;
+  totalFailedAttempts: number;
+  cooldownUntil?: string;
+  frozenUntil?: string;
+  firstCallPendingByUserId?: string;
+  firstCallDate?: string;
+  lastAttemptDate?: string;
+  lastAnsweredDate?: string;
+  clientId?: string;
+  enteredByUserId: string;
+  notes?: string;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  currentAssignee?: { id: string; email: string };
+  enteredBy?: { id: string; email: string };
+  client?: { id: string; name: string };
+}
+
+export interface FollowUpDto {
+  id: string;
+  clientNumberId: string;
+  userId: string;
+  scheduledDate: string;
+  followUpNumber: number;
+  status: FollowUpStatus;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface NumberActivityLogDto {
+  id: string;
+  clientNumberId: string;
+  userId: string;
+  action: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
+  user?: { id: string; email: string };
+}
+
+export interface PoolStatsDto {
+  available: number;
+  assigned: number;
+  reserved: number;
+  archived: number;
+  coolingDown: number;
+  frozen: number;
+  total: number;
+}
+
+export interface AddNumberDto {
+  phoneNumber: string;
+  clientName?: string;
+  source?: string;
+  interests?: string;
+  notes?: string;
+}
+
+export interface BulkImportDto {
+  numbers: Array<{ phoneNumber: string; clientName?: string; source?: string }>;
+}
+
+export interface BulkImportResponseDto {
+  successCount: number;
+  errorCount: number;
+  errors: string[];
+}
+
+export interface UpdateLeadStatusDto {
+  leadStatus: LeadStatus;
+}
+
+export interface NumberQueryDto {
+  page?: number;
+  limit?: number;
+  poolStatus?: NumberPoolStatus;
+  leadStatus?: LeadStatus;
+  assigneeId?: string;
+}
+
+// ============================================================================
+// LEAVE TYPES
+// ============================================================================
+
+export interface LeaveRequestDto {
+  id: string;
+  userId: string;
+  leaveDate: string;
+  reason?: string;
+  status: LeaveStatus;
+  approvedByUserId?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; email: string };
+  approvedBy?: { id: string; email: string };
+}
+
+export interface CreateLeaveDto {
+  leaveDate: string;
+  reason?: string;
+}
+
+export interface ApproveLeaveDto {
+  type: 'PAID' | 'UNPAID';
+}
+
+export interface RejectLeaveDto {
+  reason: string;
+}
+
+export interface LeaveQueryDto {
+  page?: number;
+  limit?: number;
+  status?: LeaveStatus;
+  userId?: string;
+}
+
+// ============================================================================
+// DEAL TYPES
+// ============================================================================
+
+export interface DealDto {
+  id: string;
+  phoneNumber: string;
+  clientName?: string;
+  userId: string;
+  amount: string;
+  service: string;
+  status: DealStatus;
+  approvedByUserId?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  commissionAmount?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; email: string };
+  approvedBy?: { id: string; email: string };
+}
+
+export interface CreateDealDto {
+  phoneNumber: string;
+  clientName?: string;
+  clientId?: string;
+  amount: number;
+  service: string;
+  notes?: string;
+}
+
+export interface UpdateDealDto {
+  phoneNumber?: string;
+  clientName?: string;
+  clientId?: string;
+  amount?: number;
+  service?: string;
+  notes?: string;
+}
+
+export interface RejectDealDto {
+  reason: string;
+}
+
+export interface DealQueryDto {
+  page?: number;
+  limit?: number;
+  status?: DealStatus;
+  userId?: string;
+}
+
+export interface DealCommissionDto {
+  totalDeals: number;
+  totalAmount: string;
+  totalCommission: string;
+  deals: Array<{
+    dealId: string;
+    amount: string;
+    commission: string;
+  }>;
+}
+
+// ============================================================================
 // COMMON TYPES
 // ============================================================================
 
@@ -619,6 +998,9 @@ export type UserList = PaginatedResponse<UserResponseDto>;
 export type AuditList = PaginatedResponse<AuditLogResponseDto>;
 export type CallList = PaginatedResponse<CallResponseDto>;
 export type CallTaskList = PaginatedResponse<CallTaskResponseDto>;
+export type LeaveList = PaginatedResponse<LeaveRequestDto>;
+export type DealList = PaginatedResponse<DealDto>;
+export type ClientNumberList = PaginatedResponse<ClientNumberDto>;
 export type ApiResponse<T> = T | ErrorResponse;
 
 // ============================================================================
@@ -634,6 +1016,181 @@ export interface ImportResultDto {
   successCount: number;
   errorCount: number;
   errors: ImportRowError[];
+}
+
+// ============================================================================
+// VALIDATION CONSTANTS
+// ============================================================================
+
+// ============================================================================
+// CLIENT TYPES
+// ============================================================================
+
+export interface ClientDto {
+  id: string;
+  clientCode: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  notes?: string;
+  createdByUserId: string;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; email: string };
+  clientNumbers?: ClientNumberDto[];
+  websites?: ClientWebsiteDto[];
+  transactions?: TransactionResponseDto[];
+  deals?: DealDto[];
+  balance?: {
+    totalDealAmount: number;
+    totalPaid: number;
+    remainingBalance: number;
+    visible: boolean;
+  };
+}
+
+export interface ClientSearchResult {
+  id: string;
+  clientCode: string;
+  name: string;
+  phone?: string;
+}
+
+export interface ClientBalanceDto {
+  id: string;
+  clientCode: string;
+  name: string;
+  phone?: string;
+  totalDealAmount: number;
+  totalPaid: number;
+  remainingBalance: number;
+  services: string[];
+}
+
+export interface CreateClientDto {
+  name: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  notes?: string;
+}
+
+export interface UpdateClientDto {
+  name?: string;
+  phone?: string;
+  email?: string;
+  company?: string;
+  notes?: string;
+}
+
+export interface ClientQueryDto {
+  page?: number;
+  limit?: number;
+  search?: string;
+  service?: string;
+}
+
+export type ClientList = PaginatedResponse<ClientDto>;
+
+// ============================================================================
+// CLIENT WEBSITE TYPES
+// ============================================================================
+
+export interface ClientWebsiteDto {
+  id: string;
+  clientId: string;
+  url: string;
+  domainRenewalDate?: string;
+  notes?: string;
+  createdByUserId: string;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'UNKNOWN';
+  client?: { id: string; name: string };
+  createdBy?: { id: string; email: string };
+}
+
+export interface CreateClientWebsiteDto {
+  url: string;
+  domainRenewalDate?: string;
+  notes?: string;
+}
+
+export interface UpdateClientWebsiteDto {
+  url?: string;
+  domainRenewalDate?: string;
+  notes?: string;
+}
+
+// ============================================================================
+// NOTIFICATION TYPES
+// ============================================================================
+
+export interface NotificationDto {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: string;
+  referenceId?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export type NotificationList = PaginatedResponse<NotificationDto>;
+
+// ============================================================================
+// SALES STATUS TYPES
+// ============================================================================
+
+export interface SalesEmployeeStatusDto {
+  userId: string;
+  email: string;
+  currentStatus: SalesStatus | null;
+  statusUpdatedAt?: string;
+  durationSeconds: number;
+}
+
+export interface SalesStatusResponseDto {
+  employees: SalesEmployeeStatusDto[];
+}
+
+// ============================================================================
+// BULK APPROVE TYPES
+// ============================================================================
+
+export interface BulkApproveCallsDto {
+  callIds?: string[];
+  userId?: string;
+  all?: boolean;
+}
+
+export interface BulkApproveResponseDto {
+  approved: number;
+  failed: number;
+  errors: string[];
+}
+
+// ============================================================================
+// NUMBER DETAIL TYPES
+// ============================================================================
+
+export interface NumberDetailDto {
+  id: string;
+  phoneNumber: string;
+  clientName?: string;
+  totalFailedAttempts: number;
+  leadStatus: LeadStatus;
+  poolStatus: NumberPoolStatus;
+  cooldownUntil?: string;
+  frozenUntil?: string;
+  firstCallDate?: string;
+  notes?: string;
+  activityLogs: NumberActivityLogDto[];
+  previousAssignees: { userId: string; email: string; date: string }[];
 }
 
 // ============================================================================

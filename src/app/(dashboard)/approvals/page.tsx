@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Pagination } from '@/components/ui/Pagination';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { Role } from '@/types/api';
 
@@ -35,7 +36,7 @@ export default function ApprovalsPage() {
 
   const limit = 10;
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['transactions', 'approvals', { page, limit }],
     queryFn: () =>
       getTransactions({
@@ -53,6 +54,7 @@ export default function ApprovalsPage() {
     onSuccess: () => {
       toast.success('Transaction approved');
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['reports', 'balance'] });
       setShowApproveConfirm(false);
       setSelectedTx(null);
     },
@@ -98,7 +100,9 @@ export default function ApprovalsPage() {
         </div>
 
         {/* Pending Transactions */}
-        {isLoading ? (
+        {isError ? (
+          <ErrorState message="Unable to load data" onRetry={refetch} />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 gap-4">
             {[1, 2, 3].map((i) => (
               <CardSkeleton key={i} />
@@ -160,7 +164,7 @@ export default function ApprovalsPage() {
 
                         <div className="flex items-center gap-2">
                           <Link href={`/transactions/${tx.id}`}>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" aria-label="View transaction">
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
@@ -169,6 +173,7 @@ export default function ApprovalsPage() {
                             onClick={() => handleApprove(tx)}
                             disabled={!hasAttachments}
                             title={!hasAttachments ? 'Upload attachments first' : 'Approve'}
+                            aria-label="Approve transaction"
                           >
                             <CheckCircle className="w-4 h-4" />
                           </Button>
@@ -176,6 +181,7 @@ export default function ApprovalsPage() {
                             variant="danger"
                             size="sm"
                             onClick={() => handleReject(tx)}
+                            aria-label="Reject transaction"
                           >
                             <XCircle className="w-4 h-4" />
                           </Button>

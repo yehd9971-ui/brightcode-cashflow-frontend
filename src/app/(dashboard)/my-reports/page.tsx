@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
 import { TableSkeleton, CardSkeleton } from '@/components/ui/Loading';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { cn } from '@/utils/cn';
@@ -42,7 +43,7 @@ export default function MyReportsPage() {
   const limit = 20;
 
   // Fetch personal attendance history
-  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching } = useQuery({
+  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching, isError, refetch } = useQuery({
     queryKey: ['my-attendance', 'history', { page, limit, ...dateRange }],
     queryFn: () =>
       getAttendanceHistory({
@@ -78,6 +79,8 @@ export default function MyReportsPage() {
 
   const sessions = historyData?.data || [];
   const totalPages = Math.ceil((historyData?.total || 0) / limit);
+
+  if (isError) return <ErrorState message="Unable to load data" onRetry={refetch} />;
 
   return (
     <ProtectedRoute requiredRoles={[Role.SALES, Role.SALES_MANAGER]}>

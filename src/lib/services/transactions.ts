@@ -58,6 +58,10 @@ export async function createTransaction(
     formData.append('phoneNumber', data.phoneNumber.trim());
   }
 
+  if (data.clientId?.trim()) {
+    formData.append('clientId', data.clientId.trim());
+  }
+
   // FIX #1: Backend uses FileInterceptor('file', ...) - key MUST be 'file' (singular)
   // This is consumed by @UploadedFile() decorator, NOT included in DTO
   if (files.length > 0) {

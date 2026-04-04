@@ -4,15 +4,8 @@ import type { NextRequest } from 'next/server';
 // Routes that don't require authentication
 const publicRoutes = ['/login'];
 
-// Routes that require ADMIN role
-const adminRoutes = ['/approvals', '/reports', '/users', '/audit'];
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const refreshToken = request.cookies.get('refreshToken')?.value;
-
-  // For now, we check for refresh token in localStorage via a different mechanism
-  // In production, you'd want to use httpOnly cookies
 
   // Allow public routes
   if (publicRoutes.includes(pathname)) {

@@ -22,17 +22,17 @@ export function ProtectedRoute({ children, requiredRole, requiredRoles }: Protec
     }
   }, [isLoading, isAuthenticated, router]);
 
-  // Show loading while checking auth
+  // Show loading while checking auth — children are NOT rendered yet
   if (isLoading) {
     return <FullPageLoading text="Loading..." />;
   }
 
-  // Not authenticated
+  // Not authenticated — children are NOT rendered
   if (!isAuthenticated) {
     return <FullPageLoading text="Redirecting..." />;
   }
 
-  // Check role requirement
+  // Check role requirement — deny before rendering children
   const allowedRoles = requiredRoles || (requiredRole ? [requiredRole] : undefined);
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return (
@@ -53,5 +53,6 @@ export function ProtectedRoute({ children, requiredRole, requiredRoles }: Protec
     );
   }
 
+  // Authorized — render children only now
   return <>{children}</>;
 }

@@ -9,6 +9,8 @@ import {
   DashboardStatsResponseDto,
   RejectCallDto,
   DailyCallReportDto,
+  BulkApproveCallsDto,
+  BulkApproveResponseDto,
 } from '@/types/api';
 
 export async function getCalls(query?: CallQueryDto): Promise<CallList> {
@@ -93,5 +95,15 @@ export async function getCallScreenshot(screenshotId: string): Promise<Blob> {
   const response = await api.get(`/calls/screenshots/${screenshotId}`, {
     responseType: 'blob',
   });
+  return response.data;
+}
+
+export async function bulkApproveCalls(data: BulkApproveCallsDto): Promise<BulkApproveResponseDto> {
+  const response = await api.post<BulkApproveResponseDto>('/calls/approvals/bulk-approve', data);
+  return response.data;
+}
+
+export async function getNeedsRetry(): Promise<CallResponseDto[]> {
+  const response = await api.get<CallResponseDto[]>('/calls/needs-retry');
   return response.data;
 }

@@ -10,3 +10,4 @@ export * from './Loading';
 export * from './Pagination';
 export * from './StatusBadge';
 export * from './EmptyState';
+export * from './ErrorState';

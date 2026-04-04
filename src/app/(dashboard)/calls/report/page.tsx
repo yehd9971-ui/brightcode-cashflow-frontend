@@ -10,7 +10,10 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { cn } from '@/utils/cn';
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { Role } from '@/types/api';
 
 export default function CallReportPage() {
   const today = new Date().toISOString().split('T')[0];
@@ -35,6 +38,7 @@ export default function CallReportPage() {
   };
 
   return (
+    <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -55,7 +59,9 @@ export default function CallReportPage() {
         </p>
       )}
 
-      {reports.length === 0 ? (
+      {generateMutation.isError ? (
+        <ErrorState message="Failed to generate report" onRetry={() => generateMutation.mutate()} />
+      ) : reports.length === 0 ? (
         <Card>
           <EmptyState
             title="No report data"
@@ -99,5 +105,6 @@ export default function CallReportPage() {
         </Card>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

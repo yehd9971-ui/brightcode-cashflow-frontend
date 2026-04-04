@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Loading';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { Role } from '@/types/api';
@@ -96,7 +97,7 @@ export default function ReportsPage() {
   });
 
   // Fetch summary for date range
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useQuery({
     queryKey: ['reports', 'summary', query],
     queryFn: () => getSummary(query),
   });
@@ -183,6 +184,8 @@ export default function ReportsPage() {
         }]
       : []),
   ];
+
+  if (summaryError) return <ErrorState message="Unable to load data" onRetry={refetchSummary} />;
 
   return (
     <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>

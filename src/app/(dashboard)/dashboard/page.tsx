@@ -11,8 +11,11 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useCallWebSocket } from '@/hooks/useCallWebSocket';
 import { cn } from '@/utils/cn';
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { Role } from '@/types/api';
 
 export default function CallDashboardPage() {
   const { user } = useAuth();
@@ -22,7 +25,7 @@ export default function CallDashboardPage() {
 
   useCallWebSocket({ userId: user?.id, joinDashboard: true, enabled: !!user });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['calls', 'dashboard-stats', date],
     queryFn: () => getDashboardStats(date),
     enabled: !!date,
@@ -33,6 +36,7 @@ export default function CallDashboardPage() {
     onSuccess: () => {
       toast.success('Report generated successfully');
       queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'dashboard-stats'] });
     },
     onError: () => toast.error('Failed to generate report'),
   });
@@ -44,6 +48,7 @@ export default function CallDashboardPage() {
   };
 
   return (
+    <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -58,7 +63,9 @@ export default function CallDashboardPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState message="Unable to load data" onRetry={refetch} />
+      ) : isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
       ) : !data || data.employees.length === 0 ? (
         <Card><EmptyState title="No data" description="No employee data for this date." /></Card>
@@ -101,5 +108,6 @@ export default function CallDashboardPage() {
         </Card>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

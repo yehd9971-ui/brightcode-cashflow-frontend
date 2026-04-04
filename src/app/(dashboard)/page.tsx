@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge, TypeBadge } from '@/components/ui/StatusBadge';
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 function formatDuration(startTime: string): string {
   const start = new Date(startTime).getTime();
@@ -57,7 +58,7 @@ export default function DashboardPage() {
   }, []);
 
   // Fetch balance (ADMIN only)
-  const { data: balance, isLoading: balanceLoading } = useQuery({
+  const { data: balance, isLoading: balanceLoading, isError, refetch } = useQuery({
     queryKey: ['reports', 'balance'],
     queryFn: () => getBalance(),
     enabled: isAdmin,
@@ -124,6 +125,8 @@ export default function DashboardPage() {
   const pendingCount = pendingData?.total || 0;
   const recentTransactions = recentData?.data || [];
   const isClockedIn = attendanceStatus && !attendanceStatus.clockOut;
+
+  if (isError) return <ErrorState message="Unable to load data" onRetry={refetch} />;
 
   return (
     <div className="space-y-6">

@@ -12,6 +12,7 @@ import {
   TransactionType,
   TransactionCategory,
   CreateTransactionDto,
+  ClientSearchResult,
   ErrorResponse,
   VALIDATION_RULES,
   validateFile,
@@ -22,6 +23,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { ClientAutocomplete } from '@/components/ui/ClientAutocomplete';
+import { ClientBalanceCard } from '@/components/ui/ClientBalanceCard';
 import { cn } from '@/utils/cn';
 
 const categoryOptions = Object.values(TransactionCategory).map((cat) => ({
@@ -43,6 +46,7 @@ export default function CreateTransactionPage() {
     phoneNumber: '',
   });
 
+  const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,6 +54,11 @@ export default function CreateTransactionPage() {
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
+
+    // Client validation — required for IN transactions
+    if (formData.type === TransactionType.IN && !selectedClient) {
+      newErrors.client = 'Client is required for income transactions';
+    }
 
     // Amount validation
     if (!formData.amount || formData.amount < VALIDATION_RULES.amount.min) {
@@ -95,7 +104,11 @@ export default function CreateTransactionPage() {
     setIsSubmitting(true);
 
     try {
-      const transaction = await createTransaction(formData, selectedFiles, user?.role);
+      const submitData = {
+        ...formData,
+        clientId: selectedClient?.id,
+      };
+      const transaction = await createTransaction(submitData, selectedFiles, user?.role);
 
       // Success message
       const fileCount = selectedFiles.length;
@@ -254,35 +267,44 @@ export default function CreateTransactionPage() {
             }
           />
 
-          {/* Customer Name */}
+          {/* Client Selection */}
+          <div className="relative">
+            <ClientAutocomplete
+              label="Client"
+              value={selectedClient}
+              onChange={(client) => {
+                setSelectedClient(client);
+                if (client) {
+                  setFormData({ ...formData, customerName: client.name });
+                } else {
+                  setFormData({ ...formData, customerName: '' });
+                }
+                if (errors.client) setErrors({ ...errors, client: '' });
+              }}
+              required={formData.type === TransactionType.IN}
+              error={errors.client}
+            />
+          </div>
+
+          {/* Client Balance Card */}
+          {selectedClient && (
+            <ClientBalanceCard clientId={selectedClient.id} />
+          )}
+
+          {/* Customer Name (auto-filled from client) */}
           <Input
             label="Customer Name"
-            placeholder="Enter customer name (optional)"
+            placeholder={selectedClient ? '' : 'Enter customer name (optional)'}
             value={formData.customerName || ''}
             onChange={(e) => {
-              setFormData({ ...formData, customerName: e.target.value });
-              if (errors.customerName) {
-                setErrors({ ...errors, customerName: '' });
+              if (!selectedClient) {
+                setFormData({ ...formData, customerName: e.target.value });
+                if (errors.customerName) setErrors({ ...errors, customerName: '' });
               }
             }}
             error={errors.customerName}
             maxLength={100}
-          />
-
-          {/* Phone Number */}
-          <Input
-            label="Phone Number"
-            type="tel"
-            placeholder="Enter phone number (optional)"
-            value={formData.phoneNumber || ''}
-            onChange={(e) => {
-              setFormData({ ...formData, phoneNumber: e.target.value });
-              if (errors.phoneNumber) {
-                setErrors({ ...errors, phoneNumber: '' });
-              }
-            }}
-            error={errors.phoneNumber}
-            maxLength={20}
+            disabled={!!selectedClient}
           />
 
           {/* Description */}
@@ -338,7 +360,7 @@ export default function CreateTransactionPage() {
               <div className="mt-3 space-y-2">
                 {selectedFiles.map((file, index) => (
                   <div
-                    key={index}
+                    key={file.name + '-' + file.size}
                     className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200"
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">

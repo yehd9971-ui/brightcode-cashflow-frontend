@@ -20,6 +20,7 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const retriesRef = useRef(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(() => {
     if (!enabled) return;
@@ -45,10 +46,6 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
       if (joinDashboard) {
         socket.emit('join:dashboard');
       }
-    });
-
-    socket.on('disconnect', () => {
-      setIsConnected(false);
     });
 
     socket.on('stats:updated', () => {
@@ -82,15 +79,28 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
       queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
     });
 
-    socket.on('connect_error', () => {
-      setIsConnected(false);
+    socket.on('employee:status-change', () => {
+      queryClient.invalidateQueries({ queryKey: ['calls', 'dashboard-stats'] });
+    });
+
+    const scheduleRetry = () => {
       if (retriesRef.current < MAX_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, retriesRef.current), 16000);
         retriesRef.current++;
-        setTimeout(() => {
+        retryTimeoutRef.current = setTimeout(() => {
           socket.connect();
         }, delay);
       }
+    };
+
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+      scheduleRetry();
+    });
+
+    socket.on('connect_error', () => {
+      setIsConnected(false);
+      scheduleRetry();
     });
 
     return socket;
@@ -99,18 +109,21 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
   useEffect(() => {
     const socket = connect();
     return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       socket?.disconnect();
       socketRef.current = null;
     };
   }, [connect]);
 
   const reconnect = useCallback(() => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     socketRef.current?.disconnect();
     retriesRef.current = 0;
     connect();
   }, [connect]);
 
   const disconnect = useCallback(() => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     socketRef.current?.disconnect();
     socketRef.current = null;
     setIsConnected(false);

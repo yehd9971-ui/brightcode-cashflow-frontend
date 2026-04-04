@@ -6,7 +6,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAttendanceHistory, getAttendanceSummary, getActiveSessions } from '@/lib/services/attendance';
-import { getUsers } from '@/lib/services/users';
+import { getUsers, getSalesStatus } from '@/lib/services/users';
 import { Role, UserResponseDto } from '@/types/api';
 import { formatDateShort } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Badge } from '@/components/ui/Badge';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { cn } from '@/utils/cn';
@@ -72,7 +73,7 @@ export default function AttendancePage() {
   ];
 
   // Fetch attendance history
-  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching } = useQuery({
+  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching, isError, refetch } = useQuery({
     queryKey: ['attendance', 'history', { page, limit, ...dateRange, userId: selectedEmployee }],
     queryFn: () =>
       getAttendanceHistory({
@@ -103,8 +104,20 @@ export default function AttendancePage() {
     queryFn: getActiveSessions,
   });
 
+  // Fetch sales status for status indicators
+  const { data: salesStatusData } = useQuery({
+    queryKey: ['sales-status'],
+    queryFn: getSalesStatus,
+  });
+
+  const salesStatusMap = new Map(
+    (salesStatusData?.employees || []).map((e) => [e.userId, { status: e.currentStatus, callStartedAt: e.callStartedAt }]),
+  );
+
   const sessions = historyData?.data || [];
   const totalPages = Math.ceil((historyData?.total || 0) / limit);
+
+  if (isError) return <ErrorState message="Unable to load data" onRetry={refetch} />;
 
   return (
     <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>
@@ -136,18 +149,49 @@ export default function AttendancePage() {
                   <thead className="bg-green-100/50 border-b border-green-200">
                     <tr>
                       <th className="text-start text-sm font-medium text-gray-600 px-4 py-2">Email</th>
+                      <th className="text-start text-sm font-medium text-gray-600 px-4 py-2">Status</th>
                       <th className="text-start text-sm font-medium text-gray-600 px-4 py-2">Clock In</th>
                       <th className="text-end text-sm font-medium text-gray-600 px-4 py-2">Duration</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-green-100">
-                    {activeSessions.map((session) => (
-                      <tr key={session.id}>
-                        <td className="px-4 py-2 text-sm text-gray-900">{session.userEmail}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{formatTime(session.clockIn)}</td>
-                        <td className="px-4 py-2 text-sm text-end font-medium text-gray-900">{formatDuration(session.clockIn)}</td>
-                      </tr>
-                    ))}
+                    {activeSessions.map((session) => {
+                      const info = salesStatusMap.get(session.userId);
+                      const status = info?.status || 'AVAILABLE';
+                      const callStart = info?.callStartedAt;
+                      return (
+                        <tr key={session.id}>
+                          <td className="px-4 py-2 text-sm text-gray-900">{session.userEmail}</td>
+                          <td className="px-4 py-2 text-sm">
+                            <span className="inline-flex items-center gap-1.5">
+                              {status === 'AVAILABLE' ? (
+                                <>
+                                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                                  <span className="text-green-700">Available</span>
+                                </>
+                              ) : status === 'ON_CALL' ? (
+                                <>
+                                  <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                  <span className="text-orange-700">On Call</span>
+                                  {callStart && (
+                                    <span className="text-xs text-orange-500 ms-1">
+                                      (since {new Date(callStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })})
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                                  <span className="text-gray-500">Offline</span>
+                                </>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{formatTime(session.clockIn)}</td>
+                          <td className="px-4 py-2 text-sm text-end font-medium text-gray-900">{formatDuration(session.clockIn)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

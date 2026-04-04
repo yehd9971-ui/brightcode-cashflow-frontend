@@ -15,6 +15,7 @@ import {
 } from '@/lib/services/users';
 import {
   Role,
+  WeeklyOffDay,
   UserResponseDto,
   CreateUserDto,
   UpdateUserDto,
@@ -31,6 +32,7 @@ import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 
 const roleOptions = [
@@ -52,6 +54,12 @@ const roleFormOptions = [
   { value: Role.ADMIN, label: 'Admin' },
 ];
 
+const weeklyOffDayOptions = [
+  { value: '', label: 'No off day' },
+  { value: WeeklyOffDay.FRIDAY, label: 'Friday' },
+  { value: WeeklyOffDay.MONDAY, label: 'Monday' },
+];
+
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
@@ -70,12 +78,14 @@ export default function UsersPage() {
     email: '',
     password: '',
     role: Role.SALES,
+    baseSalary: undefined,
+    weeklyOffDay: undefined,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const limit = 20;
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['users', { page, role: roleFilter, isActive: statusFilter }],
     queryFn: () =>
       getUsers({
@@ -148,7 +158,7 @@ export default function UsersPage() {
   });
 
   const resetForm = () => {
-    setFormData({ email: '', password: '', role: Role.SALES });
+    setFormData({ email: '', password: '', role: Role.SALES, baseSalary: undefined, weeklyOffDay: undefined });
     setFormErrors({});
   };
 
@@ -184,6 +194,8 @@ export default function UsersPage() {
       email: user.email,
       password: '',
       role: user.role,
+      baseSalary: user.baseSalary ? Number(user.baseSalary) : undefined,
+      weeklyOffDay: user.weeklyOffDay || undefined,
     });
     setShowEditModal(true);
   };
@@ -197,6 +209,14 @@ export default function UsersPage() {
 
     if (formData.password) {
       updateData.password = formData.password;
+    }
+
+    if (formData.baseSalary !== undefined) {
+      updateData.baseSalary = formData.baseSalary;
+    }
+
+    if (formData.weeklyOffDay) {
+      updateData.weeklyOffDay = formData.weeklyOffDay;
     }
 
     updateMutation.mutate({ id: selectedUser.id, data: updateData });
@@ -246,7 +266,9 @@ export default function UsersPage() {
 
         {/* Users Table */}
         <Card padding="none">
-          {isLoading ? (
+          {isError ? (
+            <ErrorState message="Unable to load data" onRetry={refetch} />
+          ) : isLoading ? (
             <div className="p-4">
               <TableSkeleton rows={5} />
             </div>
@@ -429,6 +451,24 @@ export default function UsersPage() {
                 setFormData({ ...formData, role: e.target.value as Role })
               }
             />
+            <Input
+              label="Base Salary"
+              type="number"
+              value={formData.baseSalary ?? ''}
+              onChange={(e) =>
+                setFormData({ ...formData, baseSalary: e.target.value ? Number(e.target.value) : undefined })
+              }
+              placeholder="e.g. 5000"
+              helperText="Monthly base salary in EGP"
+            />
+            <Select
+              label="Weekly Off Day"
+              options={weeklyOffDayOptions}
+              value={formData.weeklyOffDay || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, weeklyOffDay: e.target.value ? (e.target.value as WeeklyOffDay) : undefined })
+              }
+            />
           </div>
         </Modal>
 
@@ -492,6 +532,24 @@ export default function UsersPage() {
             {selectedUser?.role === Role.ADMIN && (
               <p className="text-sm text-gray-500 mt-1">Admin role cannot be changed</p>
             )}
+            <Input
+              label="Base Salary"
+              type="number"
+              value={formData.baseSalary ?? ''}
+              onChange={(e) =>
+                setFormData({ ...formData, baseSalary: e.target.value ? Number(e.target.value) : undefined })
+              }
+              placeholder="e.g. 5000"
+              helperText="Monthly base salary in EGP"
+            />
+            <Select
+              label="Weekly Off Day"
+              options={weeklyOffDayOptions}
+              value={formData.weeklyOffDay || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, weeklyOffDay: e.target.value ? (e.target.value as WeeklyOffDay) : undefined })
+              }
+            />
           </div>
         </Modal>
 

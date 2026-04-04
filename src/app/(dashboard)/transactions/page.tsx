@@ -24,6 +24,7 @@ import { Select } from '@/components/ui/Select';
 import { StatusBadge, TypeBadge } from '@/components/ui/StatusBadge';
 import { Pagination } from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Loading';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 const typeOptions = [
@@ -127,7 +128,7 @@ export default function TransactionsPage() {
     updateUrl(newFilters);
   };
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => getTransactions(filters),
   });
@@ -219,6 +220,8 @@ export default function TransactionsPage() {
       setIsExporting(null);
     }
   };
+
+  if (isError) return <ErrorState message="Unable to load data" onRetry={refetch} />;
 
   return (
     <div className="space-y-6">

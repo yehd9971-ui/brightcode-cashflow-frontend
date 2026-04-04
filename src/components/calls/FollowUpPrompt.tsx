@@ -5,16 +5,19 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { ThumbsDown } from 'lucide-react';
 
 interface FollowUpPromptProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: { taskDate: string; taskTime: string; notes?: string }) => void;
+  onNotInterested?: () => void;
+  notInterestedLoading?: boolean;
   clientPhoneNumber: string;
   loading?: boolean;
 }
 
-export function FollowUpPrompt({ isOpen, onClose, onSubmit, clientPhoneNumber, loading }: FollowUpPromptProps) {
+export function FollowUpPrompt({ isOpen, onClose, onSubmit, onNotInterested, notInterestedLoading, clientPhoneNumber, loading }: FollowUpPromptProps) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const defaultDate = tomorrow.toISOString().split('T')[0];
@@ -35,6 +38,15 @@ export function FollowUpPrompt({ isOpen, onClose, onSubmit, clientPhoneNumber, l
       size="md"
       footer={
         <>
+          {onNotInterested && (
+            <Button
+              variant="danger"
+              onClick={onNotInterested}
+              loading={notInterestedLoading}
+            >
+              <ThumbsDown className="w-4 h-4 mr-1" /> Not Interested
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>Skip</Button>
           <Button onClick={handleSubmit} loading={loading} disabled={!taskDate || !taskTime}>
             Schedule Follow-up

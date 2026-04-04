@@ -1,4 +1,5 @@
 import { format, parseISO } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { ar, enUS } from 'date-fns/locale';
 
 export function formatDate(
@@ -60,4 +61,14 @@ export function getInitials(email: string): string {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
   return name.substring(0, 2).toUpperCase();
+}
+
+export function formatEgyptDateTime(isoDate: string): string {
+  try {
+    const date = parseISO(isoDate);
+    const egyptDate = toZonedTime(date, 'Africa/Cairo');
+    return format(egyptDate, 'dd/MM/yyyy - HH:mm');
+  } catch {
+    return isoDate;
+  }
 }

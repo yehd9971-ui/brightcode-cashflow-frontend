@@ -69,6 +69,7 @@ export default function TransactionDetailPage() {
     onSuccess: () => {
       toast.success('Transaction approved successfully');
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['reports', 'balance'] });
       setShowApproveConfirm(false);
     },
     onError: () => {

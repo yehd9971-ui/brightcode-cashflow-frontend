@@ -5,6 +5,7 @@ import { Menu, LogOut, ChevronDown } from 'lucide-react';
 import { UserResponseDto, Role } from '@/types/api';
 import { getInitials } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
+import { NotificationBell } from './NotificationBell';
 
 interface NavbarProps {
   user: UserResponseDto;
@@ -45,6 +46,7 @@ export function Navbar({
 
         {/* Right side */}
         <div className="flex items-center gap-2 ms-auto">
+          <NotificationBell />
           {/* User Menu */}
           <div className="relative" ref={menuRef}>
             <button

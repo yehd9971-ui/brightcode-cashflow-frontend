@@ -10,8 +10,15 @@ interface DailyProgressCardProps {
 }
 
 export function DailyProgressCard({ stats }: DailyProgressCardProps) {
+  const dynamicTarget = stats.dynamicCallTarget || 50;
+  const targetLabel = dynamicTarget === 10
+    ? 'Target: 10 \u2014 60min talk + 10 answered'
+    : dynamicTarget === 25
+    ? 'Target: 25 \u2014 60min talk time reached'
+    : 'Target: 50 (default)';
+
   const metrics = [
-    { label: 'Total Calls', value: stats.totalCalls, target: 25, icon: Phone, color: 'blue' },
+    { label: 'Total Calls', value: stats.totalCalls, target: dynamicTarget, icon: Phone, color: 'blue', hint: targetLabel },
     { label: 'Talk Time', value: stats.totalTalkMinutes, target: 60, icon: Clock, color: 'purple', suffix: 'min' },
     { label: 'Answered', value: stats.answeredCalls, target: 10, icon: PhoneIncoming, color: 'green' },
     { label: 'Completion', value: Math.round(stats.completionPercent), target: 100, icon: TrendingUp, color: 'amber', suffix: '%', isPercent: true },
@@ -25,6 +32,7 @@ export function DailyProgressCard({ stats }: DailyProgressCardProps) {
   };
 
   return (
+    <div className="space-y-2">
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {metrics.map((metric) => {
         const colors = colorMap[metric.color];
@@ -52,6 +60,8 @@ export function DailyProgressCard({ stats }: DailyProgressCardProps) {
           </Card>
         );
       })}
+    </div>
+    <p className="text-xs font-medium text-gray-500 px-1">{targetLabel}</p>
     </div>
   );
 }

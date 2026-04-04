@@ -4,31 +4,33 @@ import { ErrorResponse, TokenResponseDto } from '@/types/api';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 const API_TIMEOUT = Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 30000;
 
-// Token storage keys
-const REFRESH_TOKEN_KEY = 'refreshToken';
-
 // In-memory access token (not stored in localStorage for security)
 let accessToken: string | null = null;
 
 // Flag to prevent multiple simultaneous refresh attempts
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
-
-// Subscribe to token refresh
-function subscribeTokenRefresh(callback: (token: string) => void) {
-  refreshSubscribers.push(callback);
-}
+let refreshSubscribers: {
+  resolve: (token: string) => void;
+  reject: (err: Error) => void;
+}[] = [];
 
 // Notify all subscribers when token is refreshed
 function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((callback) => callback(token));
+  refreshSubscribers.forEach((sub) => sub.resolve(token));
   refreshSubscribers = [];
 }
 
-// Create axios instance
+// Reject all subscribers on refresh failure
+function onTokenRefreshFailed(err: Error) {
+  refreshSubscribers.forEach((sub) => sub.reject(err));
+  refreshSubscribers = [];
+}
+
+// Create axios instance with credentials for cookie-based auth
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -44,20 +46,23 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor - handle errors and token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ErrorResponse>) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
     // If 401 and not a retry, attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Check if this is a login or refresh request (don't retry these)
-      const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
-                             originalRequest.url?.includes('/auth/refresh');
+      const isAuthEndpoint =
+        originalRequest.url?.includes('/auth/login') ||
+        originalRequest.url?.includes('/auth/refresh');
 
       if (isAuthEndpoint) {
         return Promise.reject(error);
@@ -65,10 +70,15 @@ api.interceptors.response.use(
 
       if (isRefreshing) {
         // Wait for token refresh to complete
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(api(originalRequest));
+        return new Promise((resolve, reject) => {
+          refreshSubscribers.push({
+            resolve: (token: string) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            },
+            reject: (err: Error) => {
+              reject(err);
+            },
           });
         });
       }
@@ -77,21 +87,16 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = getRefreshToken();
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
+        // Cookie sent automatically via withCredentials
         const response = await axios.post<TokenResponseDto>(
           `${API_BASE_URL}/auth/refresh`,
-          { refreshToken }
+          {},
+          { withCredentials: true },
         );
 
-        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
+        const { accessToken: newAccessToken } = response.data;
 
         setAccessToken(newAccessToken);
-        setRefreshToken(newRefreshToken);
-
         onTokenRefreshed(newAccessToken);
         isRefreshing = false;
 
@@ -99,7 +104,11 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         isRefreshing = false;
-        refreshSubscribers = [];
+        onTokenRefreshFailed(
+          refreshError instanceof Error
+            ? refreshError
+            : new Error('Token refresh failed'),
+        );
 
         // Clear tokens and redirect to login
         clearTokens();
@@ -114,7 +123,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // Token management functions
@@ -126,29 +135,13 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-export function setRefreshToken(token: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(REFRESH_TOKEN_KEY, token);
-  }
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
-  }
-  return null;
-}
-
 export function clearTokens(): void {
   accessToken = null;
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-  }
 }
 
-// Check if user is authenticated
+// Check if user is authenticated (only in-memory access token is checkable)
 export function isAuthenticated(): boolean {
-  return accessToken !== null || getRefreshToken() !== null;
+  return accessToken !== null;
 }
 
 export default api;

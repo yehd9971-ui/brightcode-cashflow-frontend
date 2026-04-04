@@ -14,10 +14,16 @@ import {
   UserCircle,
   X,
   PhoneCall,
-  ListTodo,
   PhoneForwarded,
+  TrendingDown,
   LayoutDashboard,
-  PhoneOutgoing,
+  Wallet,
+  CalendarDays,
+  BookUser,
+  Database,
+  Handshake,
+  Contact,
+  Briefcase,
 } from 'lucide-react';
 import { Role } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -43,21 +49,9 @@ const navItems: NavItem[] = [
     icon: Receipt,
   },
   {
-    label: 'Log Call',
-    href: '/calls/new',
-    icon: PhoneOutgoing,
-    exact: true,
-  },
-  {
     label: 'My Calls',
     href: '/calls',
     icon: PhoneCall,
-  },
-  {
-    label: "Today's Tasks",
-    href: '/calls/tasks',
-    icon: ListTodo,
-    exact: true,
   },
   {
     label: 'Call Approvals',
@@ -79,6 +73,13 @@ const navItems: NavItem[] = [
     roles: [Role.ADMIN],
   },
   {
+    label: 'Approval Dashboard',
+    href: '/approvals/dashboard',
+    icon: LayoutDashboard,
+    roles: [Role.ADMIN],
+    exact: true,
+  },
+  {
     label: 'Reports',
     href: '/reports',
     icon: BarChart3,
@@ -91,6 +92,69 @@ const navItems: NavItem[] = [
     roles: [Role.ADMIN, Role.SALES_MANAGER],
   },
   {
+    label: 'My Numbers',
+    href: '/numbers',
+    icon: BookUser,
+    roles: [Role.SALES, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'Number Pool',
+    href: '/numbers/pool',
+    icon: Database,
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'My Deals',
+    href: '/deals',
+    icon: Handshake,
+    roles: [Role.SALES, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'All Deals',
+    href: '/deals/admin',
+    icon: Handshake,
+    roles: [Role.ADMIN],
+    exact: true,
+  },
+  {
+    label: 'My Salary',
+    href: '/salary',
+    icon: Wallet,
+    roles: [Role.SALES, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'My Deductions',
+    href: '/salary/deductions',
+    icon: TrendingDown,
+    roles: [Role.SALES, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'Salary Management',
+    href: '/salary/admin',
+    icon: Wallet,
+    roles: [Role.ADMIN],
+    exact: true,
+  },
+  {
+    label: 'My Leaves',
+    href: '/leaves',
+    icon: CalendarDays,
+    roles: [Role.SALES, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
+    label: 'Leave Approvals',
+    href: '/leaves/approvals',
+    icon: CalendarDays,
+    roles: [Role.ADMIN],
+    exact: true,
+  },
+  {
     label: 'My Reports',
     href: '/my-reports',
     icon: UserCircle,
@@ -101,6 +165,16 @@ const navItems: NavItem[] = [
     href: '/users',
     icon: Users,
     roles: [Role.ADMIN],
+  },
+  {
+    label: 'Clients',
+    href: '/clients',
+    icon: Contact,
+  },
+  {
+    label: 'Portfolio',
+    href: '/portfolio',
+    icon: Briefcase,
   },
   {
     label: 'Audit Logs',
@@ -164,7 +238,7 @@ export function Sidebar({ userRole, isOpen, onClose, pendingTransactionCount, pe
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           {filteredItems.map((item) => {
             const isActive = item.exact
               ? pathname === item.href

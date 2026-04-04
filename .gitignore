@@ -40,3 +40,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright
+.auth/
+test-results/
+playwright-report/
+
+# Secrets / keys — NEVER commit
+DEPLOY_KEY.txt
+*.key
+*.pem
+
+# Claude Code
+.claude/
