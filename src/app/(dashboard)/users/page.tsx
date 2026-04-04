@@ -74,12 +74,13 @@ export default function UsersPage() {
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserResponseDto | null>(null);
 
-  const [formData, setFormData] = useState<CreateUserDto>({
+  const [formData, setFormData] = useState<CreateUserDto & { isModerator?: boolean }>({
     email: '',
     password: '',
     role: Role.SALES,
     baseSalary: undefined,
     weeklyOffDay: undefined,
+    isModerator: false,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -158,7 +159,7 @@ export default function UsersPage() {
   });
 
   const resetForm = () => {
-    setFormData({ email: '', password: '', role: Role.SALES, baseSalary: undefined, weeklyOffDay: undefined });
+    setFormData({ email: '', password: '', role: Role.SALES, baseSalary: undefined, weeklyOffDay: undefined, isModerator: false });
     setFormErrors({});
   };
 
@@ -196,6 +197,7 @@ export default function UsersPage() {
       role: user.role,
       baseSalary: user.baseSalary ? Number(user.baseSalary) : undefined,
       weeklyOffDay: user.weeklyOffDay || undefined,
+      isModerator: user.isModerator ?? false,
     });
     setShowEditModal(true);
   };
@@ -217,6 +219,10 @@ export default function UsersPage() {
 
     if (formData.weeklyOffDay) {
       updateData.weeklyOffDay = formData.weeklyOffDay;
+    }
+
+    if (formData.role === Role.SALES) {
+      updateData.isModerator = formData.isModerator ?? false;
     }
 
     updateMutation.mutate({ id: selectedUser.id, data: updateData });
@@ -316,17 +322,22 @@ export default function UsersPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant={
-                              user.role === Role.ADMIN
-                                ? 'info'
-                                : user.role === Role.SALES_MANAGER
-                                ? 'warning'
-                                : 'neutral'
-                            }
-                          >
-                            {user.role === Role.SALES_MANAGER ? 'SALES MANAGER' : user.role}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                user.role === Role.ADMIN
+                                  ? 'info'
+                                  : user.role === Role.SALES_MANAGER
+                                  ? 'warning'
+                                  : 'neutral'
+                              }
+                            >
+                              {user.role === Role.SALES_MANAGER ? 'SALES MANAGER' : user.role}
+                            </Badge>
+                            {user.isModerator && (
+                              <Badge variant="info">Moderator</Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant={user.isActive ? 'success' : 'error'}>
@@ -550,6 +561,18 @@ export default function UsersPage() {
                 setFormData({ ...formData, weeklyOffDay: e.target.value ? (e.target.value as WeeklyOffDay) : undefined })
               }
             />
+            {formData.role === Role.SALES && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isModerator ?? false}
+                  onChange={(e) => setFormData({ ...formData, isModerator: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Moderator</span>
+                <span className="text-xs text-gray-400">(exempt from call penalties)</span>
+              </label>
+            )}
           </div>
         </Modal>
 

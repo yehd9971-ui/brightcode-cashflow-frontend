@@ -209,6 +209,7 @@ export interface UserResponseDto {
   email: string;
   role: Role;
   isActive: boolean;
+  isModerator?: boolean;
   baseSalary?: string;
   weeklyOffDay?: WeeklyOffDay;
   createdAt: string;
@@ -240,6 +241,7 @@ export interface UpdateUserDto {
   password?: string;
   baseSalary?: number;
   weeklyOffDay?: WeeklyOffDay;
+  isModerator?: boolean;
 }
 
 export interface UserQueryDto {

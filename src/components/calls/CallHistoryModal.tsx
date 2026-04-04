@@ -4,10 +4,11 @@ import { getCalls } from '@/lib/services/calls';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { CallStatusBadge, ApprovalStatusBadge } from '@/components/calls/CallStatusBadge';
+import { ScreenshotViewer } from '@/components/calls/ScreenshotViewer';
 import { formatDateShort } from '@/utils/formatters';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface CallHistoryModalProps {
@@ -83,6 +84,25 @@ export function CallHistoryModal({ isOpen, onClose, phoneNumber }: CallHistoryMo
                       </div>
                     ) : (
                       <p className="text-gray-400 italic">No notes provided</p>
+                    )}
+                    {call.screenshot && (
+                      <div className="mt-2">
+                        <ScreenshotViewer screenshot={call.screenshot} />
+                      </div>
+                    )}
+                    {call.approvalStatus === 'REJECTED' && (
+                      <div className="mt-3 border border-red-200 bg-red-50 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+                          <XCircle className="w-4 h-4" />
+                          Rejected
+                        </div>
+                        <p className="text-sm text-red-700">{call.rejectionReason || 'No reason provided'}</p>
+                        {call.approvedBy && (
+                          <p className="text-xs text-red-500">
+                            Rejected by {call.approvedBy.email}{call.approvedAt ? ` on ${formatDateShort(call.approvedAt)}` : ''}
+                          </p>
+                        )}
+                      </div>
                     )}
                     {call.user && (
                       <p className="text-xs text-gray-400 mt-2 text-right">Added by: {call.user.email}</p>
