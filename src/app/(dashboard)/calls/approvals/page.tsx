@@ -4,10 +4,10 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, XCircle, AlertTriangle, CheckCheck, ThumbsDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getCallApprovals, approveCall, rejectCall, bulkApproveCalls, getNeedsRetry } from '@/lib/services/calls';
+import { getCallApprovals, approveCall, rejectCall, bulkApproveCalls, getNeedsRetry, getCalls } from '@/lib/services/calls';
 import { getNiPending, approveNi, rejectNi } from '@/lib/services/client-numbers';
 import { getSalesUsers } from '@/lib/services/users';
-import { CallResponseDto, Role } from '@/types/api';
+import { CallResponseDto, CallApprovalStatus, Role } from '@/types/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +28,7 @@ export default function CallApprovalsPage() {
   const queryClient = useQueryClient();
   const isAdmin = user?.role === Role.ADMIN;
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'retry' | 'ni'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'retry' | 'ni' | 'history'>('pending');
   const [page, setPage] = useState(1);
   const [selectedCall, setSelectedCall] = useState<CallResponseDto | null>(null);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
@@ -76,6 +76,20 @@ export default function CallApprovalsPage() {
     refetchInterval: 15000,
   });
   const niPending = niPendingData || [];
+
+  // History tab state
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyFilter, setHistoryFilter] = useState<CallApprovalStatus>(CallApprovalStatus.APPROVED);
+  const [historyUserId, setHistoryUserId] = useState('');
+
+  // Fetch approved/rejected call history
+  const { data: historyData, isLoading: historyLoading, isError: isHistoryError, refetch: refetchHistory, isFetching: historyFetching } = useQuery({
+    queryKey: ['calls', 'history', { page: historyPage, limit, approvalStatus: historyFilter, userId: historyUserId || undefined }],
+    queryFn: () => getCalls({ page: historyPage, limit, approvalStatus: historyFilter, userId: historyUserId || undefined }),
+    enabled: activeTab === 'history',
+  });
+  const historyCalls = historyData?.data || [];
+  const historyTotalPages = Math.ceil((historyData?.total || 0) / limit);
 
   const niApproveMutation = useMutation({
     mutationFn: (id: string) => approveNi(id),
@@ -226,9 +240,88 @@ export default function CallApprovalsPage() {
           >
             Not Interested ({niPending.length})
           </button>
+          <button
+            onClick={() => { setActiveTab('history'); setHistoryPage(1); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'history' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            History ({historyData?.total ?? '...'})
+          </button>
         </div>
 
-        {activeTab === 'ni' ? (
+        {activeTab === 'history' ? (
+          <>
+            {/* History filters */}
+            <Card className="p-4">
+              <div className="flex flex-col md:flex-row md:items-end gap-4">
+                <div className="w-full md:w-48">
+                  <Select
+                    label="Status"
+                    value={historyFilter}
+                    onChange={(e) => { setHistoryFilter(e.target.value as CallApprovalStatus); setHistoryPage(1); }}
+                    options={[
+                      { value: CallApprovalStatus.APPROVED, label: 'Approved' },
+                      { value: CallApprovalStatus.REJECTED, label: 'Rejected' },
+                    ]}
+                  />
+                </div>
+                {isAdmin && (
+                  <div className="w-full md:w-64">
+                    <Select
+                      label="Employee"
+                      value={historyUserId}
+                      onChange={(e) => { setHistoryUserId(e.target.value); setHistoryPage(1); }}
+                      options={userOptions}
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {historyLoading ? (
+              <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
+            ) : isHistoryError ? (
+              <ErrorState message="Unable to load call history" onRetry={refetchHistory} />
+            ) : historyCalls.length === 0 ? (
+              <Card><EmptyState title="No calls found" description="No approved or rejected calls match your filters." /></Card>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {historyCalls.map((call) => (
+                    <Card key={call.id} className="p-4">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg font-semibold text-gray-900">{call.rawPhoneNumber}</span>
+                            <CallStatusBadge status={call.callStatus} size="sm" />
+                            {call.approvalStatus === 'APPROVED' ? (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800">Approved</span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">Rejected</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                            <span>by {call.user.email}</span>
+                            <span>{formatDateShort(call.createdAt)}</span>
+                            {call.durationMinutes && <span>Duration: {call.durationMinutes} min</span>}
+                            {call.approvedBy && <span>Reviewed by: {call.approvedBy.email}</span>}
+                          </div>
+                          {call.notes && <p className="text-sm text-gray-600">{call.notes}</p>}
+                          {call.rejectionReason && (
+                            <p className="text-sm text-red-600">Reason: {call.rejectionReason}</p>
+                          )}
+                          {call.screenshot && <ScreenshotViewer screenshot={call.screenshot} />}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+                <Pagination currentPage={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage} loading={historyFetching} total={historyData?.total || 0} limit={limit} />
+              </>
+            )}
+          </>
+        ) : activeTab === 'ni' ? (
           <Card>
             {niPending.length === 0 ? (
               <EmptyState title="No pending requests" description="No Not Interested requests to review." />
