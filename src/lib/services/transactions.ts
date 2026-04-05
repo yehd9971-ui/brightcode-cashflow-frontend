@@ -68,17 +68,12 @@ export async function createTransaction(
     formData.append('file', files[0]);
   }
 
-  // FIX #3: Override default 'application/json' Content-Type
-  // Axios instance has default 'Content-Type': 'application/json' (see api.ts:33)
-  // We MUST explicitly override it to let axios auto-set multipart/form-data with boundary
-  // Setting to undefined removes the default and lets axios handle FormData correctly
   const response = await api.post<TransactionResponseDto>(
     '/transactions',
     formData,
     {
       headers: {
-        // CRITICAL: Override default JSON Content-Type to let axios auto-set multipart
-        'Content-Type': undefined,
+        'Content-Type': 'multipart/form-data',
       },
     }
   );
