@@ -30,6 +30,7 @@ import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NumberDetailCard } from '@/components/numbers/NumberDetailCard';
+import { NumberSearchBar } from '@/components/numbers/NumberSearchBar';
 import { PendingCompletionList } from '@/components/numbers/PendingCompletionList';
 import { LeadStatus, Role, CallTaskStatus } from '@/types/api';
 import type { ClientNumberDto, AddNumberDto, CallTaskResponseDto } from '@/types/api';
@@ -336,6 +337,9 @@ export default function NumbersPage() {
           </Button>
         </div>
       </div>
+
+      {/* Global Number Search */}
+      <NumberSearchBar />
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200">

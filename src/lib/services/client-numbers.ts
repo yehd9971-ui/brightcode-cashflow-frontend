@@ -104,3 +104,8 @@ export async function getNumberDetail(numberId: string): Promise<NumberDetailDto
   const response = await api.get<NumberDetailDto>(`/client-numbers/${numberId}/detail`);
   return response.data;
 }
+
+export async function searchNumbers(q: string): Promise<ClientNumberDto[]> {
+  const response = await api.get<ClientNumberDto[]>('/client-numbers/search', { params: { q } });
+  return response.data;
+}
