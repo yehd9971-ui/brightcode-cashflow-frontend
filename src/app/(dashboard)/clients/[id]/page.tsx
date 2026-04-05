@@ -28,7 +28,8 @@ function calcRenewalDate(startDate: string): string {
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSalesManager } = useAuth();
+  const canViewWebsites = isAdmin || isSalesManager;
   const queryClient = useQueryClient();
 
   // Website modal
@@ -53,7 +54,7 @@ export default function ClientDetailPage() {
   const { data: websites } = useQuery({
     queryKey: ['client-websites', id],
     queryFn: () => getClientWebsites(id),
-    enabled: !!id,
+    enabled: !!id && canViewWebsites,
   });
 
   const addWebsiteMutation = useMutation({
@@ -98,6 +99,16 @@ export default function ClientDetailPage() {
       notes: client.notes || '',
     });
     setShowEditClient(true);
+  };
+
+  const buildUpdatePayload = (form: UpdateClientDto): UpdateClientDto => {
+    const payload: UpdateClientDto = {};
+    if (form.name?.trim()) payload.name = form.name.trim();
+    if (form.phone?.trim()) payload.phone = form.phone.trim();
+    if (form.email?.trim()) payload.email = form.email.trim();
+    if (form.company?.trim()) payload.company = form.company.trim();
+    if (form.notes?.trim()) payload.notes = form.notes.trim();
+    return payload;
   };
 
   const openEditWebsite = (w: ClientWebsiteDto) => {
@@ -179,8 +190,8 @@ export default function ClientDetailPage() {
         </Card>
       )}
 
-      {/* Websites */}
-      <Card title={`Websites (${websites?.length ?? 0})`}>
+      {/* Websites (ADMIN/SALES_MANAGER only) */}
+      {canViewWebsites && <Card title={`Websites (${websites?.length ?? 0})`}>
         {isAdmin && (
           <div className="p-4">
             <Button variant="outline" size="sm" onClick={() => setShowAddWebsite(true)}>
@@ -213,7 +224,7 @@ export default function ClientDetailPage() {
             </div>
           ))}
         </div>
-      </Card>
+      </Card>}
 
       {/* Transactions */}
       {client.transactions && client.transactions.length > 0 && (
@@ -248,7 +259,7 @@ export default function ClientDetailPage() {
           <Button
             onClick={() => {
               if (!editForm.name?.trim()) { toast.error('Name is required'); return; }
-              updateMutation.mutate(editForm);
+              updateMutation.mutate(buildUpdatePayload(editForm));
             }}
             loading={updateMutation.isPending}
             fullWidth

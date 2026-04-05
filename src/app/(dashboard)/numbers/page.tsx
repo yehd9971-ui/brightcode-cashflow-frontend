@@ -30,6 +30,7 @@ import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NumberDetailCard } from '@/components/numbers/NumberDetailCard';
+import { NumberSearchBar } from '@/components/numbers/NumberSearchBar';
 import { PendingCompletionList } from '@/components/numbers/PendingCompletionList';
 import { LeadStatus, Role, CallTaskStatus } from '@/types/api';
 import type { ClientNumberDto, AddNumberDto, CallTaskResponseDto } from '@/types/api';
@@ -57,44 +58,52 @@ export default function NumbersPage() {
   const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
   const [taskForm, setTaskForm] = useState({ phone: '', userId: '', date: '', time: '', notes: '' });
+  const [viewUserId, setViewUserId] = useState<string>('');
+  const isViewingOther = !!viewUserId;
+  const targetUserId = viewUserId || user?.id;
+
+  const { data: salesUsers } = useQuery({
+    queryKey: ['sales-users'],
+    queryFn: getSalesUsers,
+    enabled: isAdmin || isManager,
+  });
+
+  const viewingUserEmail = viewUserId ? salesUsers?.find(u => u.id === viewUserId)?.email : null;
 
   const { data: myNumbers, isLoading, isError, refetch } = useQuery({
-    queryKey: ['my-numbers'],
-    queryFn: () => getMyNumbers({ page: 1, limit: 100 }),
+    queryKey: ['my-numbers', targetUserId],
+    queryFn: () => getMyNumbers({ page: 1, limit: 100, userId: targetUserId }),
+    enabled: !!targetUserId,
   });
 
   const { data: pendingCompletions } = useQuery({
-    queryKey: ['pending-completions'],
-    queryFn: getPendingCompletions,
+    queryKey: ['pending-completions', targetUserId],
+    queryFn: () => getPendingCompletions(targetUserId),
+    enabled: !!targetUserId,
   });
 
   const { data: callStatus } = useQuery({
     queryKey: ['my-call-status'],
     queryFn: getMyCallStatus,
     refetchInterval: 15000,
-    enabled: activeTab === 'today',
+    enabled: activeTab === 'today' && !isViewingOther,
   });
 
-  const isOnCall = callStatus?.currentStatus === 'ON_CALL';
-  const activeCallPhone = callStatus?.currentCallPhone;
+  const isOnCall = !isViewingOther && callStatus?.currentStatus === 'ON_CALL';
+  const activeCallPhone = !isViewingOther ? callStatus?.currentCallPhone : undefined;
 
   const { data: needsRetry } = useQuery({
-    queryKey: ['calls', 'needs-retry'],
-    queryFn: getNeedsRetry,
+    queryKey: ['calls', 'needs-retry', targetUserId],
+    queryFn: () => getNeedsRetry(targetUserId),
     refetchInterval: 30000,
-    enabled: activeTab === 'today',
+    enabled: activeTab === 'today' && !!targetUserId,
   });
 
   const { data: todayTasks } = useQuery({
-    queryKey: ['call-tasks', 'today'],
-    queryFn: getTodayCallTasks,
+    queryKey: ['call-tasks', 'today', targetUserId],
+    queryFn: () => getTodayCallTasks(targetUserId),
     refetchInterval: 30000,
-  });
-
-  const { data: salesUsers } = useQuery({
-    queryKey: ['sales-users'],
-    queryFn: getSalesUsers,
-    enabled: canCreateTask,
+    enabled: !!targetUserId,
   });
 
   // Timer for countdown refresh
@@ -277,6 +286,7 @@ export default function NumbersPage() {
 
   // --- Call button helper ---
   const renderCallButton = (phoneNumber: string, variant?: 'yellow' | 'orange' | 'default') => {
+    if (isViewingOther) return null;
     const waitMins = retryWaitMap.get(phoneNumber);
     if (isOnCall && activeCallPhone === phoneNumber) {
       return (
@@ -316,26 +326,53 @@ export default function NumbersPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">My Numbers</h1>
-        <div className="flex gap-2">
-          {canCreateTask && (
-            <Button variant="outline" onClick={() => setShowTaskModal(true)}>
-              <CalendarPlus className="w-4 h-4 mr-1" /> Create Task
-            </Button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isViewingOther ? `${viewingUserEmail}'s Numbers` : 'My Numbers'}
+          </h1>
+          {(isAdmin || isManager) && salesUsers && (
+            <Select
+              value={viewUserId}
+              onChange={(e) => { setViewUserId(e.target.value); setSelectedNumberId(null); }}
+              options={[
+                { value: '', label: 'My Numbers' },
+                ...salesUsers
+                  .filter(u => u.id !== user?.id && (u.role === 'SALES' || u.role === 'SALES_MANAGER'))
+                  .map(u => ({ value: u.id, label: u.email })),
+              ]}
+            />
           )}
-          <Button variant="outline" onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-1" /> Add Number
-          </Button>
-          <Button
-            onClick={() => pullMutation.mutate()}
-            loading={pullMutation.isPending}
-            disabled={uncalledNumbers.length > 0}
-            title={uncalledNumbers.length > 0 ? `Call ${uncalledNumbers.map(n => n.phoneNumber).join(', ')} first` : undefined}
-          >
-            <ArrowRight className="w-4 h-4 mr-1" /> Pull from Pool
-          </Button>
         </div>
+        {!isViewingOther && (
+          <div className="flex gap-2">
+            {canCreateTask && (
+              <Button variant="outline" onClick={() => setShowTaskModal(true)}>
+                <CalendarPlus className="w-4 h-4 mr-1" /> Create Task
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-1" /> Add Number
+            </Button>
+            <Button
+              onClick={() => pullMutation.mutate()}
+              loading={pullMutation.isPending}
+              disabled={uncalledNumbers.length > 0}
+              title={uncalledNumbers.length > 0 ? `Call ${uncalledNumbers.map(n => n.phoneNumber).join(', ')} first` : undefined}
+            >
+              <ArrowRight className="w-4 h-4 mr-1" /> Pull from Pool
+            </Button>
+          </div>
+        )}
       </div>
+
+      {isViewingOther && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          <span>Viewing {viewingUserEmail}'s numbers (read-only)</span>
+        </div>
+      )}
+
+      {/* Global Number Search */}
+      <NumberSearchBar />
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
@@ -372,7 +409,7 @@ export default function NumbersPage() {
       {activeTab === 'today' && (
         <>
           {/* Active Call Banner */}
-          {isOnCall && (
+          {isOnCall && !isViewingOther && (
             <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-300 rounded-lg">
               <div className="flex items-center gap-3">
                 <span className="inline-block w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
@@ -537,15 +574,17 @@ export default function NumbersPage() {
                     </div>
                     <div className="flex gap-1">
                       {renderCallButton(num.phoneNumber)}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 border-red-300 hover:bg-red-50"
-                        onClick={() => notInterestedMutation.mutate(num.id)}
-                        loading={notInterestedMutation.isPending}
-                      >
-                        <ThumbsDown className="w-4 h-4 mr-1" /> Not Interested
-                      </Button>
+                      {!isViewingOther && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          onClick={() => notInterestedMutation.mutate(num.id)}
+                          loading={notInterestedMutation.isPending}
+                        >
+                          <ThumbsDown className="w-4 h-4 mr-1" /> Not Interested
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -593,10 +632,12 @@ export default function NumbersPage() {
                     <span className="text-xs text-gray-400">Fails: {num.totalFailedAttempts}</span>
                     <div className="flex gap-1">
                       {renderCallButton(num.phoneNumber)}
-                      {num.leadStatus === LeadStatus.NEW && (
+                      {!isViewingOther && num.leadStatus === LeadStatus.NEW && (
                         <Button variant="outline" size="sm" onClick={() => followUpMutation.mutate(num.id)}>Follow Up</Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => returnMutation.mutate(num.id)}>Return</Button>
+                      {!isViewingOther && (
+                        <Button variant="outline" size="sm" onClick={() => returnMutation.mutate(num.id)}>Return</Button>
+                      )}
                     </div>
                   </div>
                 </div>

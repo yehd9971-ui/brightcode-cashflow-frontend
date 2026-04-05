@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Upload, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { createCall, getNeedsRetry } from '@/lib/services/calls';
+import { createCall, getCalls } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
 import { markNotInterested, getMyNumbers } from '@/lib/services/client-numbers';
 import { CallStatus } from '@/types/api';
@@ -46,11 +46,15 @@ export default function LogCallPage() {
   }, [previewUrl]);
 
   // Check if this phone has a first NOT_ANSWERED today (making this the 2nd attempt)
-  const { data: retryList } = useQuery({
-    queryKey: ['calls', 'needs-retry'],
-    queryFn: getNeedsRetry,
+  const normalizedPhone = normalizePhoneNumber(phone);
+  const todayEgypt = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+  const { data: phoneCalls, isLoading: isPhoneCheckLoading } = useQuery({
+    queryKey: ['calls', 'phone-check', normalizedPhone, todayEgypt],
+    queryFn: () => getCalls({ phoneNumber: normalizedPhone, date: todayEgypt, callStatus: CallStatus.NOT_ANSWERED, limit: 5 }),
+    enabled: normalizedPhone.length >= 7,
   });
-  const isSecondAttempt = retryList?.some(c => normalizePhoneNumber(c.clientPhoneNumber) === normalizePhoneNumber(phone)) ?? false;
+  const isSecondAttempt = (phoneCalls?.data?.length ?? 0) >= 1;
+  const phoneCheckPending = callStatus === CallStatus.NOT_ANSWERED && normalizedPhone.length >= 7 && isPhoneCheckLoading;
 
   const createMutation = useMutation({
     mutationFn: () => createCall(
@@ -162,7 +166,7 @@ export default function LogCallPage() {
   // Screenshot required for: Answered calls (always) and second Not Answered attempt
   // First Not Answered: no screenshot, hidden entirely
   const screenshotRequired = callStatus === CallStatus.ANSWERED || (callStatus === CallStatus.NOT_ANSWERED && isSecondAttempt);
-  const canSubmit = phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && (screenshotRequired ? !!screenshot : true);
+  const canSubmit = !phoneCheckPending && phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && (screenshotRequired ? !!screenshot : true);
 
   return (
     <div className="max-w-lg mx-auto space-y-6">

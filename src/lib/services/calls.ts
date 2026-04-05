@@ -103,7 +103,7 @@ export async function bulkApproveCalls(data: BulkApproveCallsDto): Promise<BulkA
   return response.data;
 }
 
-export async function getNeedsRetry(): Promise<CallResponseDto[]> {
-  const response = await api.get<CallResponseDto[]>('/calls/needs-retry');
+export async function getNeedsRetry(userId?: string): Promise<CallResponseDto[]> {
+  const response = await api.get<CallResponseDto[]>('/calls/needs-retry', { params: userId ? { userId } : undefined });
   return response.data;
 }
