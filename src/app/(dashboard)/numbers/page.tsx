@@ -60,7 +60,7 @@ export default function NumbersPage() {
   const [taskForm, setTaskForm] = useState({ phone: '', userId: '', date: '', time: '', notes: '' });
   const [viewUserId, setViewUserId] = useState<string>('');
   const isViewingOther = !!viewUserId;
-  const targetUserId = viewUserId || undefined;
+  const targetUserId = viewUserId || user?.id;
 
   const { data: salesUsers } = useQuery({
     queryKey: ['sales-users'],
