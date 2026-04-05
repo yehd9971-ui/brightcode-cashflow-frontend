@@ -33,7 +33,7 @@ export default function PortfolioPage() {
 
   const copyAllUrls = () => {
     if (!filtered || filtered.length === 0) return;
-    const allUrls = filtered.map((w: ClientWebsiteDto) => w.url).join('\n');
+    const allUrls = filtered.map((w: ClientWebsiteDto, i: number) => `${i + 1}. ${w.url}`).join('\n');
     navigator.clipboard.writeText(allUrls);
     toast.success(`${filtered.length} URLs copied`);
   };
