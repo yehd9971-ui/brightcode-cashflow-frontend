@@ -64,7 +64,7 @@ export default function CallApprovalsPage() {
 
   const { data: retryData } = useQuery({
     queryKey: ['calls', 'needs-retry'],
-    queryFn: getNeedsRetry,
+    queryFn: () => getNeedsRetry(),
     refetchInterval: 15000,
   });
   const retryCalls = retryData || [];

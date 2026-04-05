@@ -73,11 +73,13 @@ export default function NumbersPage() {
   const { data: myNumbers, isLoading, isError, refetch } = useQuery({
     queryKey: ['my-numbers', targetUserId],
     queryFn: () => getMyNumbers({ page: 1, limit: 100, userId: targetUserId }),
+    enabled: !!targetUserId,
   });
 
   const { data: pendingCompletions } = useQuery({
     queryKey: ['pending-completions', targetUserId],
     queryFn: () => getPendingCompletions(targetUserId),
+    enabled: !!targetUserId,
   });
 
   const { data: callStatus } = useQuery({
@@ -94,13 +96,14 @@ export default function NumbersPage() {
     queryKey: ['calls', 'needs-retry', targetUserId],
     queryFn: () => getNeedsRetry(targetUserId),
     refetchInterval: 30000,
-    enabled: activeTab === 'today',
+    enabled: activeTab === 'today' && !!targetUserId,
   });
 
   const { data: todayTasks } = useQuery({
     queryKey: ['call-tasks', 'today', targetUserId],
     queryFn: () => getTodayCallTasks(targetUserId),
     refetchInterval: 30000,
+    enabled: !!targetUserId,
   });
 
   // Timer for countdown refresh
