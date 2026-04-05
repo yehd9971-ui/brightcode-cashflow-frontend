@@ -118,7 +118,7 @@ export default function NumbersPage() {
   // Retry wait map
   const retryWaitMap = new Map<string, number>();
   needsRetry?.forEach(call => {
-    const minutesLeft = 120 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
+    const minutesLeft = 30 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
     if (minutesLeft > 0) {
       retryWaitMap.set(call.clientPhoneNumber, minutesLeft);
     }
