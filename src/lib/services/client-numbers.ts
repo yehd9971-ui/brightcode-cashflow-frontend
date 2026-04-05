@@ -28,7 +28,7 @@ export async function pullFromPool(): Promise<ClientNumberDto> {
   return response.data;
 }
 
-export async function getMyNumbers(query?: { page?: number; limit?: number; leadStatus?: string }): Promise<ClientNumberList> {
+export async function getMyNumbers(query?: { page?: number; limit?: number; leadStatus?: string; userId?: string }): Promise<ClientNumberList> {
   const response = await api.get<ClientNumberList>('/client-numbers/my-numbers', { params: query });
   return response.data;
 }
@@ -67,8 +67,8 @@ export async function pullForCompletion(numberId: string): Promise<ClientNumberD
   return response.data;
 }
 
-export async function getPendingCompletions(): Promise<any[]> {
-  const response = await api.get('/client-numbers/pending-completions');
+export async function getPendingCompletions(userId?: string): Promise<any[]> {
+  const response = await api.get('/client-numbers/pending-completions', { params: userId ? { userId } : undefined });
   return response.data;
 }
 

@@ -21,8 +21,8 @@ export async function getCallTaskById(id: string): Promise<CallTaskResponseDto> 
   return response.data;
 }
 
-export async function getTodayCallTasks(): Promise<CallTaskResponseDto[]> {
-  const response = await api.get<CallTaskResponseDto[]>('/call-tasks/today');
+export async function getTodayCallTasks(userId?: string): Promise<CallTaskResponseDto[]> {
+  const response = await api.get<CallTaskResponseDto[]>('/call-tasks/today', { params: userId ? { userId } : undefined });
   return response.data;
 }
 
