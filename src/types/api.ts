@@ -138,6 +138,7 @@ export enum BonusType {
 export enum LeadStatus {
   NEW = 'NEW',
   INTERESTED = 'INTERESTED',
+  HOT_LEAD = 'HOT_LEAD',
   FOLLOWING_UP = 'FOLLOWING_UP',
   SOLD = 'SOLD',
   NOT_INTERESTED = 'NOT_INTERESTED',
@@ -761,6 +762,7 @@ export interface ClientNumberDto {
   deletedAt?: string;
   createdAt: string;
   updatedAt: string;
+  leadStatusChangedAt?: string;
   currentAssignee?: { id: string; email: string };
   enteredBy?: { id: string; email: string };
   client?: { id: string; name: string };

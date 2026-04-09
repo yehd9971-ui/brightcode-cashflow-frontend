@@ -7,8 +7,8 @@ import { Phone, Upload, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCall, getCalls } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
-import { markNotInterested, getMyNumbers } from '@/lib/services/client-numbers';
-import { CallStatus } from '@/types/api';
+import { markNotInterested, getMyNumbers, updateLeadStatus } from '@/lib/services/client-numbers';
+import { CallStatus, LeadStatus } from '@/types/api';
 import { normalizePhoneNumber } from '@/utils/phone';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -75,7 +75,6 @@ export default function LogCallPage() {
       } else {
         toast.success('Call logged successfully');
       }
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
       queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
@@ -137,6 +136,23 @@ export default function LogCallPage() {
       queryClient.invalidateQueries({ queryKey: ['ni-pending'] });
       setShowFollowUp(false);
       router.push('/numbers');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed');
+    },
+  });
+
+  const hotLeadMutation = useMutation({
+    mutationFn: () => {
+      const cn = myNumbersData?.data.find(
+        (n) => normalizePhoneNumber(n.normalizedPhone) === normalizePhoneNumber(lastCallPhone)
+      );
+      if (!cn) throw new Error('Number not found in your assigned list');
+      return updateLeadStatus(cn.id, { leadStatus: LeadStatus.HOT_LEAD });
+    },
+    onSuccess: () => {
+      toast.success('Marked as Hot Lead!');
+      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || err?.message || 'Failed');
@@ -313,6 +329,8 @@ export default function LogCallPage() {
         onSubmit={(data) => followUpMutation.mutate(data)}
         onNotInterested={() => notInterestedMutation.mutate()}
         notInterestedLoading={notInterestedMutation.isPending}
+        onHotLead={() => hotLeadMutation.mutate()}
+        hotLeadLoading={hotLeadMutation.isPending}
         clientPhoneNumber={lastCallPhone}
         loading={followUpMutation.isPending}
       />

@@ -37,7 +37,7 @@ import type { ClientNumberDto, AddNumberDto, CallTaskResponseDto } from '@/types
 import { startCall, getMyCallStatus } from '@/lib/services/users';
 import { getNeedsRetry } from '@/lib/services/calls';
 import { useRouter } from 'next/navigation';
-import { Phone, Plus, ArrowRight, PhoneCall, FileText, Clock, CalendarPlus, CheckCircle, ThumbsDown, AlertTriangle } from 'lucide-react';
+import { Phone, Plus, ArrowRight, PhoneCall, FileText, Clock, CalendarPlus, CheckCircle, ThumbsDown, AlertTriangle, Flame } from 'lucide-react';
 
 // Get today's Egypt date as YYYY-MM-DD
 function getTodayEgypt(): string {
@@ -52,7 +52,7 @@ export default function NumbersPage() {
   const isManager = user?.role === Role.SALES_MANAGER;
   const canCreateTask = isAdmin || isManager;
 
-  const [activeTab, setActiveTab] = useState<'today' | 'assigned'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'assigned' | 'hot'>('today');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
@@ -85,8 +85,8 @@ export default function NumbersPage() {
   const { data: callStatus } = useQuery({
     queryKey: ['my-call-status'],
     queryFn: getMyCallStatus,
-    refetchInterval: 15000,
-    enabled: activeTab === 'today' && !isViewingOther,
+    refetchInterval: activeTab === 'today' && !isViewingOther ? 15000 : false,
+    enabled: !isViewingOther,
   });
 
   const isOnCall = !isViewingOther && callStatus?.currentStatus === 'ON_CALL';
@@ -95,8 +95,8 @@ export default function NumbersPage() {
   const { data: needsRetry } = useQuery({
     queryKey: ['calls', 'needs-retry', targetUserId],
     queryFn: () => getNeedsRetry(targetUserId),
-    refetchInterval: 30000,
-    enabled: activeTab === 'today' && !!targetUserId,
+    refetchInterval: activeTab === 'today' ? 30000 : false,
+    enabled: !!targetUserId,
   });
 
   const { data: todayTasks } = useQuery({
@@ -153,6 +153,7 @@ export default function NumbersPage() {
       if (isInRetry) continue;
       const calledToday = num.lastAttemptDate === todayEgypt;
       if (calledToday) {
+        if (num.assignmentType === 'SELF_ENTERED') continue;
         calledNums.push(num);
       } else {
         newNums.push(num);
@@ -196,6 +197,18 @@ export default function NumbersPage() {
         && !retryPhoneSet.has(n.normalizedPhone)
     ) ?? [];
   }, [myNumbers?.data, isAdmin, retryPhoneSet]);
+
+  // Hot lead numbers
+  const hotLeadNumbers = useMemo(() => {
+    if (!myNumbers?.data) return [];
+    return myNumbers.data
+      .filter(n => n.leadStatus === LeadStatus.HOT_LEAD)
+      .sort((a, b) => {
+        const aTime = a.leadStatusChangedAt ? new Date(a.leadStatusChangedAt).getTime() : 0;
+        const bTime = b.leadStatusChangedAt ? new Date(b.leadStatusChangedAt).getTime() : 0;
+        return bTime - aTime;
+      });
+  }, [myNumbers?.data]);
 
   // Count for tabs
   const todayCount = todayNumbers.newNumbers.length + sortedTasks.length + (needsRetry?.length ?? 0) + (pendingCompletions?.length ?? 0) + todayNumbers.calledNumbers.length;
@@ -383,6 +396,14 @@ export default function NumbersPage() {
           }`}
         >
           Today's Calls ({todayCount})
+        </button>
+        <button
+          onClick={() => setActiveTab('hot')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'hot' ? 'border-amber-600 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Hot Leads ({hotLeadNumbers.length})
         </button>
         <button
           onClick={() => setActiveTab('assigned')}
@@ -601,6 +622,63 @@ export default function NumbersPage() {
         </>
       )}
 
+      {/* ═══════════════ HOT LEADS TAB ═══════════════ */}
+      {activeTab === 'hot' && (
+        <>
+          {hotLeadNumbers.length > 0 ? (
+            <Card title={`Hot Leads (${hotLeadNumbers.length})`}>
+              <div className="p-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
+                Numbers marked as Hot Lead during call reports. Follow up quickly for best results.
+              </div>
+              <div className="divide-y divide-gray-100">
+                {hotLeadNumbers.map((num) => {
+                  const daysSince = num.leadStatusChangedAt
+                    ? Math.floor((Date.now() - new Date(num.leadStatusChangedAt).getTime()) / 86400000)
+                    : null;
+                  const daysLabel = daysSince === null ? '' : daysSince === 0 ? 'Today' : daysSince === 1 ? '1 day ago' : `${daysSince} days ago`;
+                  const taskForNum = taskByPhone.get(num.phoneNumber);
+                  return (
+                    <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <Flame className="w-4 h-4 text-amber-500" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
+                              {num.phoneNumber}
+                            </button>
+                            <Badge variant="warning" className="text-xs">HOT LEAD</Badge>
+                            {daysLabel && <span className="text-xs text-gray-400">{daysLabel}</span>}
+                          </div>
+                          {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
+                          {taskForNum && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 mt-0.5">
+                              <Clock className="w-3 h-3" /> Task at {taskForNum.taskTime}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {renderCallButton(num.phoneNumber)}
+                        {!isViewingOther && (
+                          <Button variant="outline" size="sm" onClick={() => followUpMutation.mutate(num.id)}>Follow Up</Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          ) : (
+            <Card>
+              <EmptyState
+                title="No hot leads"
+                description="Mark interested clients as Hot Lead during call reports."
+              />
+            </Card>
+          )}
+        </>
+      )}
+
       {/* ═══════════════ ASSIGNED NUMBERS TAB ═══════════════ */}
       {activeTab === 'assigned' && (
         <Card title={`Assigned Numbers (${myNumbers?.total ?? 0})`}>
@@ -626,7 +704,7 @@ export default function NumbersPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={num.leadStatus === LeadStatus.SOLD ? 'success' : num.leadStatus === LeadStatus.NOT_INTERESTED ? 'error' : 'info'}>
+                    <Badge variant={num.leadStatus === LeadStatus.SOLD ? 'success' : num.leadStatus === LeadStatus.NOT_INTERESTED ? 'error' : num.leadStatus === LeadStatus.HOT_LEAD ? 'warning' : 'info'}>
                       {num.leadStatus.replace(/_/g, ' ')}
                     </Badge>
                     <span className="text-xs text-gray-400">Fails: {num.totalFailedAttempts}</span>

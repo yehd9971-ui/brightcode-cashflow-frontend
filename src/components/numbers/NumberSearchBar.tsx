@@ -13,6 +13,7 @@ import type { ClientNumberDto } from '@/types/api';
 const leadStatusBadge: Record<string, { label: string; variant: 'info' | 'success' | 'warning' | 'error' | 'neutral' }> = {
   NEW: { label: 'New', variant: 'info' },
   INTERESTED: { label: 'Interested', variant: 'success' },
+  HOT_LEAD: { label: 'Hot Lead', variant: 'warning' },
   FOLLOWING_UP: { label: 'Following Up', variant: 'warning' },
   SOLD: { label: 'Sold', variant: 'success' },
   NOT_INTERESTED: { label: 'Not Interested', variant: 'error' },
