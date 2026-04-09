@@ -10,13 +10,13 @@ let accessToken: string | null = null;
 // Flag to prevent multiple simultaneous refresh attempts
 let isRefreshing = false;
 let refreshSubscribers: {
-  resolve: (token: string) => void;
+  resolve: (data: TokenResponseDto) => void;
   reject: (err: Error) => void;
 }[] = [];
 
 // Notify all subscribers when token is refreshed
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach((sub) => sub.resolve(token));
+function onTokenRefreshed(data: TokenResponseDto) {
+  refreshSubscribers.forEach((sub) => sub.resolve(data));
   refreshSubscribers = [];
 }
 
@@ -24,6 +24,37 @@ function onTokenRefreshed(token: string) {
 function onTokenRefreshFailed(err: Error) {
   refreshSubscribers.forEach((sub) => sub.reject(err));
   refreshSubscribers = [];
+}
+
+// Shared token refresh with race protection — used by both the interceptor and AuthContext
+export async function performTokenRefresh(): Promise<TokenResponseDto> {
+  if (isRefreshing) {
+    return new Promise<TokenResponseDto>((resolve, reject) => {
+      refreshSubscribers.push({ resolve, reject });
+    });
+  }
+
+  isRefreshing = true;
+
+  try {
+    const response = await axios.post<TokenResponseDto>(
+      `${API_BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    );
+
+    setAccessToken(response.data.accessToken);
+    onTokenRefreshed(response.data);
+    isRefreshing = false;
+
+    return response.data;
+  } catch (error) {
+    isRefreshing = false;
+    onTokenRefreshFailed(
+      error instanceof Error ? error : new Error('Token refresh failed'),
+    );
+    throw error;
+  }
 }
 
 // Create axios instance with credentials for cookie-based auth
@@ -68,48 +99,13 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      if (isRefreshing) {
-        // Wait for token refresh to complete
-        return new Promise((resolve, reject) => {
-          refreshSubscribers.push({
-            resolve: (token: string) => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-              resolve(api(originalRequest));
-            },
-            reject: (err: Error) => {
-              reject(err);
-            },
-          });
-        });
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
 
       try {
-        // Cookie sent automatically via withCredentials
-        const response = await axios.post<TokenResponseDto>(
-          `${API_BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true },
-        );
-
-        const { accessToken: newAccessToken } = response.data;
-
-        setAccessToken(newAccessToken);
-        onTokenRefreshed(newAccessToken);
-        isRefreshing = false;
-
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        const data = await performTokenRefresh();
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        isRefreshing = false;
-        onTokenRefreshFailed(
-          refreshError instanceof Error
-            ? refreshError
-            : new Error('Token refresh failed'),
-        );
-
         // Clear tokens and redirect to login
         clearTokens();
 

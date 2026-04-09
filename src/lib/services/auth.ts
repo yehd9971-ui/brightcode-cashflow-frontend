@@ -1,5 +1,4 @@
-import axios from 'axios';
-import api, { setAccessToken, clearTokens, API_BASE_URL } from '@/lib/api';
+import api, { setAccessToken, clearTokens, performTokenRefresh } from '@/lib/api';
 import { LoginDto, TokenResponseDto } from '@/types/api';
 
 export async function login(credentials: LoginDto): Promise<TokenResponseDto> {
@@ -12,17 +11,8 @@ export async function login(credentials: LoginDto): Promise<TokenResponseDto> {
 }
 
 export async function refreshAccessToken(): Promise<TokenResponseDto> {
-  // Use raw axios to avoid interceptor interference with token refresh
-  const response = await axios.post<TokenResponseDto>(
-    `${API_BASE_URL}/auth/refresh`,
-    {},
-    { withCredentials: true },
-  );
-  const { accessToken: newAccessToken } = response.data;
-
-  setAccessToken(newAccessToken);
-
-  return response.data;
+  // Uses shared lock to prevent concurrent refresh races with the interceptor
+  return performTokenRefresh();
 }
 
 export async function logout(): Promise<void> {
