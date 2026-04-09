@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { ThumbsDown } from 'lucide-react';
+import { ThumbsDown, Flame } from 'lucide-react';
 
 interface FollowUpPromptProps {
   isOpen: boolean;
@@ -13,11 +13,13 @@ interface FollowUpPromptProps {
   onSubmit: (data: { taskDate: string; taskTime: string; notes?: string }) => void;
   onNotInterested?: () => void;
   notInterestedLoading?: boolean;
+  onHotLead?: () => void;
+  hotLeadLoading?: boolean;
   clientPhoneNumber: string;
   loading?: boolean;
 }
 
-export function FollowUpPrompt({ isOpen, onClose, onSubmit, onNotInterested, notInterestedLoading, clientPhoneNumber, loading }: FollowUpPromptProps) {
+export function FollowUpPrompt({ isOpen, onClose, onSubmit, onNotInterested, notInterestedLoading, onHotLead, hotLeadLoading, clientPhoneNumber, loading }: FollowUpPromptProps) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const defaultDate = tomorrow.toISOString().split('T')[0];
@@ -45,6 +47,16 @@ export function FollowUpPrompt({ isOpen, onClose, onSubmit, onNotInterested, not
               loading={notInterestedLoading}
             >
               <ThumbsDown className="w-4 h-4 mr-1" /> Not Interested
+            </Button>
+          )}
+          {onHotLead && (
+            <Button
+              variant="outline"
+              onClick={onHotLead}
+              loading={hotLeadLoading}
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+            >
+              <Flame className="w-4 h-4 mr-1" /> Hot Lead
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>Skip</Button>

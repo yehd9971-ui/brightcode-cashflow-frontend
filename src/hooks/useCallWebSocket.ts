@@ -58,21 +58,29 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
     });
 
     socket.on('call:created', () => {
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'pending-count'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'phone-check'] });
     });
 
     socket.on('call:updated', () => {
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
     });
 
     socket.on('call:approved', () => {
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'pending-count'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
     });
 
     socket.on('call:rejected', () => {
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'pending-count'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
     });
 
     socket.on('task:updated', () => {

@@ -29,6 +29,7 @@ function getLeadStatusVariant(status: LeadStatus) {
   switch (status) {
     case LeadStatus.NEW: return 'info';
     case LeadStatus.INTERESTED: return 'warning';
+    case LeadStatus.HOT_LEAD: return 'warning';
     case LeadStatus.FOLLOWING_UP: return 'warning';
     case LeadStatus.SOLD: return 'success';
     case LeadStatus.NOT_INTERESTED: return 'error';
