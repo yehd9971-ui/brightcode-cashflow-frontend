@@ -48,12 +48,12 @@ export default function LogCallPage() {
   // Check if this phone has a first NOT_ANSWERED today (making this the 2nd attempt)
   const normalizedPhone = normalizePhoneNumber(phone);
   const todayEgypt = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
-  const { data: phoneCalls, isLoading: isPhoneCheckLoading } = useQuery({
+  const { data: phoneCalls, isLoading: isPhoneCheckLoading, isError: isPhoneCheckError } = useQuery({
     queryKey: ['calls', 'phone-check', normalizedPhone, todayEgypt],
     queryFn: () => getCalls({ phoneNumber: normalizedPhone, date: todayEgypt, callStatus: CallStatus.NOT_ANSWERED, limit: 5 }),
     enabled: normalizedPhone.length >= 7,
   });
-  const isSecondAttempt = (phoneCalls?.data?.length ?? 0) >= 1;
+  const isSecondAttempt = isPhoneCheckError || (phoneCalls?.data?.length ?? 0) >= 1;
   const phoneCheckPending = callStatus === CallStatus.NOT_ANSWERED && normalizedPhone.length >= 7 && isPhoneCheckLoading;
 
   const createMutation = useMutation({
