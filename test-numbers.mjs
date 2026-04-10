@@ -154,7 +154,7 @@ async function apiPost(path, body, tkn) {
       // 24
       assert(t0.scheduledAt, 'Task has scheduledAt', `scheduledAt=${t0.scheduledAt}`);
       // 25
-      assert(t0.status === 'PENDING' || t0.status === 'OVERDUE', 'Task status is PENDING or OVERDUE', `status=${t0.status}`);
+      assert(t0.status === 'PENDING', 'Task status is PENDING', `status=${t0.status}`);
       // 26
       assert(t0.source, 'Task has source', `source=${t0.source}`);
     } else {
