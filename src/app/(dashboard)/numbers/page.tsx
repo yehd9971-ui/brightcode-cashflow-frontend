@@ -511,19 +511,18 @@ export default function NumbersPage() {
               <div className="divide-y divide-gray-100">
                 {sortedTasks.map((task) => {
                   const isAlerted = new Date(task.scheduledAt) <= new Date();
-                  const isOverdue = task.status === CallTaskStatus.OVERDUE;
                   return (
                     <div key={task.id}
-                      className={`flex items-center justify-between p-3 ${isOverdue ? 'bg-red-50' : isAlerted ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+                      className={`flex items-center justify-between p-3 ${isAlerted ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                     >
                       <div className="flex items-center gap-3">
-                        <Clock className={`w-4 h-4 ${isOverdue ? 'text-red-500' : isAlerted ? 'text-orange-500' : 'text-blue-500'}`} />
+                        <Clock className={`w-4 h-4 ${isAlerted ? 'text-orange-500' : 'text-blue-500'}`} />
                         <div>
                           <span className="font-medium text-gray-900">{task.rawPhoneNumber}</span>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs text-gray-500">at {task.taskTime}</span>
-                            <Badge variant={isOverdue ? 'error' : isAlerted ? 'warning' : 'info'} className="text-xs">
-                              {isOverdue ? 'OVERDUE' : isAlerted ? 'NOW' : 'UPCOMING'}
+                            <Badge variant={isAlerted ? 'warning' : 'info'} className="text-xs">
+                              {isAlerted ? 'NOW' : 'UPCOMING'}
                             </Badge>
                             {task.source !== 'MANUAL_SALES' && (
                               <span className="text-xs text-gray-400">

@@ -1,6 +1,6 @@
 'use client';
 
-import { Phone, PhoneOff, PhoneMissed, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Phone, PhoneOff, PhoneMissed, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { CallStatus, CallApprovalStatus, CallTaskStatus } from '@/types/api';
 import { cn } from '@/utils/cn';
 
@@ -62,7 +62,7 @@ export function TaskStatusBadge({ status, size = 'md' }: TaskStatusBadgeProps) {
     [CallTaskStatus.PENDING]: { icon: Clock, text: 'Pending', className: 'bg-yellow-100 text-yellow-800' },
     [CallTaskStatus.COMPLETED]: { icon: CheckCircle, text: 'Completed', className: 'bg-green-100 text-green-800' },
     [CallTaskStatus.REJECTED]: { icon: XCircle, text: 'Rejected', className: 'bg-red-100 text-red-800' },
-    [CallTaskStatus.OVERDUE]: { icon: AlertTriangle, text: 'Overdue', className: 'bg-orange-100 text-orange-800' },
+    [CallTaskStatus.OVERDUE]: { icon: Clock, text: 'Pending', className: 'bg-yellow-100 text-yellow-800' },
   };
   const config = configs[status];
   const Icon = config.icon;
