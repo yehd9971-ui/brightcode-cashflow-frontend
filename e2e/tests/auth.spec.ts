@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/login.page';
 import { ADMIN } from '../helpers/test-data';
+import { loginViaUI } from '../helpers/login.helper';
 
 test.describe('Authentication', () => {
   test('should display login form with email and password fields', async ({ page }) => {
@@ -48,15 +49,21 @@ test.describe('Authentication', () => {
     const loginPage = new LoginPage(page);
     await loginPage.goto();
     await loginPage.login('nonexistent@test.com', 'WrongPassword123!');
+
+    if (await page.getByText('Too many login attempts').isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await page.waitForTimeout(61_000);
+      const dismissBtn = page.getByRole('button', { name: 'Dismiss' });
+      if (await dismissBtn.isVisible().catch(() => false)) {
+        await dismissBtn.click();
+      }
+      await loginPage.login('nonexistent@test.com', 'WrongPassword123!');
+    }
+
     await expect(page.getByText('Invalid email or password')).toBeVisible({ timeout: 5_000 });
   });
 
   test('should login successfully and persist session after reload', async ({ page }) => {
-    // Login
-    const loginPage = new LoginPage(page);
-    await loginPage.goto();
-    await loginPage.login(ADMIN.email, ADMIN.password);
-    await page.waitForURL(/^(?!.*\/login)/, { timeout: 15_000 });
+    await loginViaUI(page, ADMIN.email, ADMIN.password);
     await expect(page.getByText('Login successful!')).toBeVisible({ timeout: 5_000 });
 
     // Persist check: reload and verify still authenticated

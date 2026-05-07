@@ -46,6 +46,7 @@ test.describe('Number Pool Page (Admin)', () => {
 
   test('should bulk import numbers via CSV', async () => {
     const poolPage = new NumberPoolPage(page);
+    await poolPage.goto();
     await poolPage.bulkImportBtn.click();
     const csv = '+201066001001,Import Test 1,PW\n+201066001002,Import Test 2,PW';
     await poolPage.importTextarea.fill(csv);
@@ -55,6 +56,7 @@ test.describe('Number Pool Page (Admin)', () => {
 
   test('should handle duplicate import errors', async () => {
     const poolPage = new NumberPoolPage(page);
+    await poolPage.goto();
     // Textarea might be closed from previous test, reopen
     if (!await poolPage.importTextarea.isVisible().catch(() => false)) {
       await poolPage.bulkImportBtn.click();

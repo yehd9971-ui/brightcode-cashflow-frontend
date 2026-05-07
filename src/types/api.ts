@@ -101,6 +101,13 @@ export enum CallTaskSource {
   FOLLOW_UP_AUTO = 'FOLLOW_UP_AUTO',
 }
 
+export enum OpenTaskBucket {
+  OVERDUE = 'overdue',
+  TODAY = 'today',
+  UPCOMING = 'upcoming',
+  ALL = 'all',
+}
+
 // ============================================================================
 // SALARY & DEDUCTIONS ENUMS
 // ============================================================================
@@ -141,6 +148,18 @@ export enum LeadStatus {
   HOT_LEAD = 'HOT_LEAD',
   FOLLOWING_UP = 'FOLLOWING_UP',
   SOLD = 'SOLD',
+  NOT_INTERESTED = 'NOT_INTERESTED',
+}
+
+export enum CrmStage {
+  NEW = 'NEW',
+  CONTACTED = 'CONTACTED',
+  INTERESTED = 'INTERESTED',
+  HOT_LEAD = 'HOT_LEAD',
+  FOLLOWING_UP = 'FOLLOWING_UP',
+  PROPOSAL_SENT = 'PROPOSAL_SENT',
+  SOLD = 'SOLD',
+  LOST = 'LOST',
   NOT_INTERESTED = 'NOT_INTERESTED',
 }
 
@@ -413,6 +432,83 @@ export interface SalesComparisonResponseDto {
   currency: string;
 }
 
+export interface CrmReportQueryDto {
+  ownerId?: string;
+  priority?: number;
+  stage?: CrmStage;
+  staleDays?: number;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface CrmReportCardsDto {
+  overdueTasks: number;
+  hotLeads: number;
+  staleLeads: number;
+  hotLeadsWithoutFollowUp: number;
+  averageCompletionHours: number;
+  hotLeadConversionRate: number;
+}
+
+export interface CrmEmployeeMetricDto {
+  userId: string;
+  email: string;
+  count: number;
+}
+
+export interface CrmAverageCompletionMetricDto {
+  userId: string;
+  email: string;
+  completedTasks: number;
+  averageHours: number;
+}
+
+export interface CrmLeadReportRowDto {
+  id: string;
+  phoneNumber: string;
+  clientName?: string;
+  stage: CrmStage;
+  ownerEmail?: string;
+  priority?: number;
+  nextActionAt?: string;
+  lastContactedAt?: string;
+}
+
+export interface CrmStaleStageMetricDto {
+  stage: CrmStage;
+  count: number;
+}
+
+export interface CrmHotLeadConversionDto {
+  hotLeadCount: number;
+  soldFromHotLeadCount: number;
+  conversionRate: number;
+}
+
+export interface CrmExportRowDto {
+  type: string;
+  label: string;
+  ownerEmail?: string;
+  phoneNumber?: string;
+  stage?: string;
+  value?: string | number;
+}
+
+export interface CrmReportResponseDto {
+  cards: CrmReportCardsDto;
+  overdueByEmployee: CrmEmployeeMetricDto[];
+  averageCompletionByEmployee: CrmAverageCompletionMetricDto[];
+  hotLeadsWithoutFollowUp: CrmLeadReportRowDto[];
+  staleLeadsByStage: CrmStaleStageMetricDto[];
+  hotLeadConversion: CrmHotLeadConversionDto;
+  exportRows: CrmExportRowDto[];
+  generatedAt: string;
+  page: number;
+  limit: number;
+}
+
 // ============================================================================
 // AUDIT TYPES
 // ============================================================================
@@ -579,10 +675,38 @@ export interface CallTaskResponseDto {
   sourceCallId?: string;
   rejectedByUserId?: string;
   rejectionReason?: string;
+  clientNumberId?: string;
+  followUpId?: string;
+  completedAt?: string;
+  closedAt?: string;
+  closedReason?: string;
   user: CallUserDto;
   createdBy: CallUserDto;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OpenTaskClientNumberDto {
+  id: string;
+  phoneNumber: string;
+  clientName?: string;
+  crmStage?: CrmStage;
+  priority?: number;
+  nextActionAt?: string;
+}
+
+export interface OpenTaskResponseDto extends CallTaskResponseDto {
+  bucket: OpenTaskBucket;
+  isOverdue: boolean;
+  clientNumber?: OpenTaskClientNumberDto;
+}
+
+export interface OpenTasksResponseDto {
+  data: OpenTaskResponseDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface CreateCallTaskDto {
@@ -601,6 +725,158 @@ export interface CallTaskQueryDto {
   userId?: string;
   status?: CallTaskStatus;
   phoneNumber?: string;
+}
+
+export interface OpenTasksQueryDto {
+  page?: number;
+  limit?: number;
+  bucket?: OpenTaskBucket;
+  userId?: string;
+  phoneNumber?: string;
+  clientNumberId?: string;
+  source?: CallTaskSource;
+  priority?: number;
+  includeCompleted?: boolean;
+}
+
+export interface CrmUserSummaryDto {
+  id: string;
+  email: string;
+  role?: Role;
+}
+
+export interface CrmTaskSummaryDto {
+  id: string;
+  userId: string;
+  clientPhoneNumber: string;
+  taskDate: string;
+  taskTime: string;
+  scheduledAt: string;
+  status: CallTaskStatus;
+  source: CallTaskSource;
+  notes?: string;
+  completedAt?: string;
+  closedAt?: string;
+  closedReason?: string;
+}
+
+export interface CrmCallSummaryDto {
+  id: string;
+  callStatus: CallStatus;
+  clientPhoneNumber: string;
+  durationMinutes?: number;
+  notes?: string;
+  createdAt: string;
+  callStartedAt?: string;
+  user?: CrmUserSummaryDto;
+}
+
+export interface CrmFollowUpSummaryDto {
+  id: string;
+  userId: string;
+  scheduledDate: string;
+  followUpNumber: number;
+  status: FollowUpStatus;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface CrmLeadResponseDto {
+  id: string;
+  phoneNumber: string;
+  normalizedPhone: string;
+  clientName?: string;
+  source?: string;
+  interests?: string;
+  stage: CrmStage;
+  crmStage?: CrmStage;
+  leadStatus: LeadStatus;
+  poolStatus: NumberPoolStatus;
+  owner?: CrmUserSummaryDto;
+  currentAssigneeId?: string;
+  priority?: number;
+  lastContactedAt?: string;
+  nextActionAt?: string;
+  nextActionType?: string;
+  lostReason?: string;
+  totalFailedAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+  nextOpenTask?: CrmTaskSummaryDto;
+  lastCall?: CrmCallSummaryDto;
+  timelinePreview: Array<{ id: string; type: string; title: string; occurredAt: string }>;
+}
+
+export interface CrmLeadDetailResponseDto extends CrmLeadResponseDto {
+  notes?: string;
+  client?: { id: string; name: string };
+  recentTasks: CrmTaskSummaryDto[];
+  followUps: CrmFollowUpSummaryDto[];
+}
+
+export interface CrmTimelineItemDto {
+  id: string;
+  type: 'activity' | 'call' | 'task' | 'follow_up' | string;
+  event: string;
+  rawAction?: string;
+  title: string;
+  details?: Record<string, unknown>;
+  occurredAt: string;
+  occurredAtEgypt: string;
+  actor?: CrmUserSummaryDto;
+  user?: CrmUserSummaryDto;
+}
+
+export interface CrmTimelineResponseDto {
+  data: CrmTimelineItemDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface CrmLeadsResponseDto {
+  data: CrmLeadResponseDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  countsByStage: Record<CrmStage, number>;
+}
+
+export interface CrmLeadsQueryDto {
+  page?: number;
+  limit?: number;
+  stage?: CrmStage;
+  ownerId?: string;
+  priority?: number;
+  stale?: boolean;
+  staleDays?: number;
+  nextAction?: 'overdue' | 'today' | 'upcoming' | 'none' | 'all';
+  sortBy?: 'updatedAt' | 'createdAt' | 'lastContactedAt' | 'nextActionAt';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface UpdateCrmLeadStageDto {
+  stage: CrmStage;
+  priority?: number;
+  lostReason?: string;
+  nextActionAt?: string;
+  nextActionType?: string;
+}
+
+export interface CreateCrmLeadTaskDto {
+  taskDate: string;
+  taskTime: string;
+  userId?: string;
+  notes?: string;
+}
+
+export interface CrmTimelineQueryDto {
+  page?: number;
+  limit?: number;
+  order?: 'asc' | 'desc';
+  eventType?: string;
 }
 
 export interface DailyCallStatsDto {
@@ -746,6 +1022,12 @@ export interface ClientNumberDto {
   source?: string;
   interests?: string;
   leadStatus: LeadStatus;
+  crmStage?: CrmStage;
+  lastContactedAt?: string;
+  nextActionAt?: string;
+  nextActionType?: string;
+  lostReason?: string;
+  priority?: number;
   currentAssigneeId?: string;
   assignmentType?: string;
   poolStatus: NumberPoolStatus;
@@ -1190,6 +1472,12 @@ export interface NumberDetailDto {
   clientName?: string;
   totalFailedAttempts: number;
   leadStatus: LeadStatus;
+  crmStage?: CrmStage;
+  lastContactedAt?: string;
+  nextActionAt?: string;
+  nextActionType?: string;
+  lostReason?: string;
+  priority?: number;
   poolStatus: NumberPoolStatus;
   cooldownUntil?: string;
   frozenUntil?: string;
