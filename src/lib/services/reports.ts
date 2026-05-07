@@ -5,6 +5,8 @@ import {
   ReportResponseDto,
   ExpensesByCategoryResponseDto,
   SalesComparisonResponseDto,
+  CrmReportQueryDto,
+  CrmReportResponseDto,
 } from '@/types/api';
 
 export async function getBalance(query?: ReportQueryDto): Promise<BalanceResponseDto> {
@@ -50,6 +52,11 @@ export async function exportToCsv(query?: ReportQueryDto): Promise<Blob> {
 
 export async function getSalesComparison(query?: ReportQueryDto): Promise<SalesComparisonResponseDto> {
   const response = await api.get<SalesComparisonResponseDto>('/reports/sales-comparison', { params: query });
+  return response.data;
+}
+
+export async function getCrmReport(query?: CrmReportQueryDto): Promise<CrmReportResponseDto> {
+  const response = await api.get<CrmReportResponseDto>('/reports/crm', { params: query });
   return response.data;
 }
 

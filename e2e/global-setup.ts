@@ -1,9 +1,24 @@
-import { login, getUsers, resetPassword, bulkImport } from './helpers/api-client';
+import { login, getUsers, resetPassword, bulkImport, createUserApi } from './helpers/api-client';
 import { ADMIN, SALES_USER, SALES_MANAGER, TEST_PHONES } from './helpers/test-data';
+import { assertLocalApiReady, assertLocalPlaywrightTargets } from './helpers/local-readiness';
+
+async function loginWithRateLimitRetry(email: string, password: string) {
+  try {
+    return await login(email, password);
+  } catch (error) {
+    if (!String(error).includes('429')) throw error;
+    console.log(`[setup] Rate limited for ${email}, waiting 65s before retry`);
+    await new Promise((resolve) => setTimeout(resolve, 65_000));
+    return login(email, password);
+  }
+}
 
 export default async function globalSetup() {
+  assertLocalPlaywrightTargets();
+  await assertLocalApiReady();
+
   // 1. Login as admin
-  const admin = await login(ADMIN.email, ADMIN.password);
+  const admin = await loginWithRateLimitRetry(ADMIN.email, ADMIN.password);
   console.log('[setup] Admin logged in');
 
   // 2. Reset passwords for test users
@@ -13,6 +28,16 @@ export default async function globalSetup() {
     if (user) {
       await resetPassword(user.id, target.password, admin.accessToken);
       console.log(`[setup] Reset password for ${target.email}`);
+    } else {
+      await createUserApi(
+        {
+          email: target.email,
+          password: target.password,
+          role: target === SALES_USER ? 'SALES' : 'SALES_MANAGER',
+        },
+        admin.accessToken,
+      );
+      console.log(`[setup] Created test user ${target.email}`);
     }
   }
 
@@ -25,7 +50,7 @@ export default async function globalSetup() {
   try {
     await bulkImport(testNumbers, admin.accessToken);
     console.log(`[setup] Imported ${TEST_PHONES.length} test numbers`);
-  } catch (e: any) {
-    console.log(`[setup] Import note: ${e.message}`);
+  } catch (error) {
+    console.log(`[setup] Import note: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

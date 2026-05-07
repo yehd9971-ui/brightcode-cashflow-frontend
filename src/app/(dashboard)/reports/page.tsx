@@ -3,19 +3,30 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { FileSpreadsheet, FileDown, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  FileSpreadsheet,
+  FileDown,
+  Flame,
+  Percent,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   getBalance,
   getSummary,
   getExpensesByCategory,
   getSalesComparison,
+  getCrmReport,
   exportToExcel,
   exportToCsv,
   downloadBlob,
 } from '@/lib/services/reports';
 import { getUsers } from '@/lib/services/users';
-import { ReportQueryDto, TransactionStatus, UserResponseDto } from '@/types/api';
+import { CrmReportQueryDto, CrmStage, ReportQueryDto, TransactionStatus, UserResponseDto } from '@/types/api';
 import { formatAmount, formatDateShort } from '@/utils/formatters';
 import { Card, StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -38,8 +49,12 @@ export default function ReportsPage() {
 
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('APPROVED');
-  const [activeTab, setActiveTab] = useState<'overview' | 'comparison'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'comparison' | 'crm'>('overview');
   const [isExporting, setIsExporting] = useState(false);
+  const [crmOwnerId, setCrmOwnerId] = useState('');
+  const [crmStage, setCrmStage] = useState('');
+  const [crmPriority, setCrmPriority] = useState('');
+  const [crmStaleDays, setCrmStaleDays] = useState('7');
 
   // Validate date range: endDate must be >= startDate
   const dateRangeError =
@@ -122,6 +137,28 @@ export default function ReportsPage() {
     enabled: activeTab === 'comparison',
   });
 
+  const crmReportQuery: CrmReportQueryDto = {
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    ownerId: crmOwnerId || undefined,
+    stage: crmStage ? (crmStage as CrmStage) : undefined,
+    priority: crmPriority ? Number(crmPriority) : undefined,
+    staleDays: crmStaleDays ? Number(crmStaleDays) : 7,
+    page: 1,
+    limit: 20,
+  };
+
+  const {
+    data: crmReport,
+    isLoading: crmReportLoading,
+    isError: crmReportError,
+    refetch: refetchCrmReport,
+  } = useQuery({
+    queryKey: ['reports', 'crm', crmReportQuery],
+    queryFn: () => getCrmReport(crmReportQuery),
+    enabled: activeTab === 'crm',
+  });
+
   const handleExportExcel = async () => {
     try {
       setIsExporting(true);
@@ -183,6 +220,19 @@ export default function ReportsPage() {
           ],
         }]
       : []),
+  ];
+
+  const crmStageOptions = [
+    { value: '', label: 'All Stages' },
+    ...Object.values(CrmStage).map((stage) => ({ value: stage, label: stage.replace(/_/g, ' ') })),
+  ];
+
+  const priorityOptions = [
+    { value: '', label: 'All Priorities' },
+    { value: '1', label: 'Low' },
+    { value: '2', label: 'Normal' },
+    { value: '3', label: 'High' },
+    { value: '4', label: 'Urgent' },
   ];
 
   if (summaryError) return <ErrorState message="Unable to load data" onRetry={refetchSummary} />;
@@ -278,6 +328,18 @@ export default function ReportsPage() {
             onClick={() => setActiveTab('comparison')}
           >
             Sales Comparison
+          </button>
+          <button
+            data-testid="crm-reports-tab"
+            className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'crm'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            )}
+            onClick={() => setActiveTab('crm')}
+          >
+            CRM
           </button>
         </div>
 
@@ -528,6 +590,222 @@ export default function ReportsPage() {
               </p>
             )}
           </Card>
+        )}
+
+        {activeTab === 'crm' && (
+          <div data-testid="crm-reports-page" className="space-y-6">
+            <Card>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  data-testid="crm-report-employee-filter"
+                  label="Employee"
+                  options={[{ value: '', label: 'All Employees' }]}
+                  groups={[{
+                    label: 'Sales Members',
+                    options: salesUsers.map((u: UserResponseDto) => ({ value: u.id, label: u.email })),
+                  }]}
+                  value={crmOwnerId}
+                  onChange={(e) => setCrmOwnerId(e.target.value)}
+                />
+                <Select
+                  data-testid="crm-report-stage-filter"
+                  label="Stage"
+                  options={crmStageOptions}
+                  value={crmStage}
+                  onChange={(e) => setCrmStage(e.target.value)}
+                />
+                <Select
+                  data-testid="crm-report-priority-filter"
+                  label="Priority"
+                  options={priorityOptions}
+                  value={crmPriority}
+                  onChange={(e) => setCrmPriority(e.target.value)}
+                />
+                <Input
+                  label="Stale Days"
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={crmStaleDays}
+                  onChange={(e) => setCrmStaleDays(e.target.value)}
+                />
+              </div>
+            </Card>
+
+            {crmReportError && (
+              <ErrorState message="Unable to load CRM reports" onRetry={() => refetchCrmReport()} />
+            )}
+
+            {crmReportLoading ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </div>
+            ) : crmReport ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+                  <div data-testid="crm-report-overdue-card">
+                    <StatCard
+                      title="Overdue Tasks"
+                      value={crmReport.cards.overdueTasks}
+                      icon={<AlertTriangle className="h-6 w-6 text-red-600" />}
+                    />
+                  </div>
+                  <div data-testid="crm-report-hot-card">
+                    <StatCard
+                      title="Hot Leads"
+                      value={crmReport.cards.hotLeads}
+                      icon={<Flame className="h-6 w-6 text-orange-600" />}
+                    />
+                  </div>
+                  <div data-testid="crm-report-stale-card">
+                    <StatCard
+                      title="Stale Leads"
+                      value={crmReport.cards.staleLeads}
+                      icon={<Clock className="h-6 w-6 text-yellow-600" />}
+                    />
+                  </div>
+                  <StatCard
+                    title="Hot Without Action"
+                    value={crmReport.cards.hotLeadsWithoutFollowUp}
+                    icon={<AlertTriangle className="h-6 w-6 text-yellow-600" />}
+                  />
+                  <StatCard
+                    title="Avg Completion"
+                    value={`${crmReport.cards.averageCompletionHours}h`}
+                    icon={<Clock className="h-6 w-6 text-blue-600" />}
+                  />
+                  <StatCard
+                    title="Hot Conversion"
+                    value={`${crmReport.cards.hotLeadConversionRate}%`}
+                    subtitle={`${crmReport.hotLeadConversion.soldFromHotLeadCount}/${crmReport.hotLeadConversion.hotLeadCount} sold`}
+                    icon={<Percent className="h-6 w-6 text-green-600" />}
+                  />
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <Card title="Overdue Tasks by Employee">
+                    <div data-testid="crm-report-overdue-table" className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead>
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Employee
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Overdue
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {crmReport.overdueByEmployee.map((row) => (
+                            <tr key={row.userId}>
+                              <td className="px-4 py-3 text-sm text-gray-900">{row.email}</td>
+                              <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">
+                                {row.count}
+                              </td>
+                            </tr>
+                          ))}
+                          {crmReport.overdueByEmployee.length === 0 && (
+                            <tr>
+                              <td colSpan={2} className="px-4 py-6 text-center text-sm text-gray-500">
+                                No overdue tasks
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  <Card title="Stale Leads by Stage">
+                    <div data-testid="crm-report-stale-stage-table" className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead>
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Stage
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Leads
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {crmReport.staleLeadsByStage.map((row) => (
+                            <tr key={row.stage}>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {row.stage.replace(/_/g, ' ')}
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm font-semibold text-yellow-700">
+                                {row.count}
+                              </td>
+                            </tr>
+                          ))}
+                          {crmReport.staleLeadsByStage.length === 0 && (
+                            <tr>
+                              <td colSpan={2} className="px-4 py-6 text-center text-sm text-gray-500">
+                                No stale leads
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+
+                <Card title="Hot Leads Without Follow-up">
+                  <div data-testid="crm-report-hot-no-action-table" className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead>
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Phone
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Client
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Owner
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Last Contacted
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Priority
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {crmReport.hotLeadsWithoutFollowUp.map((lead) => (
+                          <tr key={lead.id}>
+                            <td className="px-4 py-3 font-mono text-sm text-blue-700">{lead.phoneNumber}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">{lead.clientName || 'Unnamed'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{lead.ownerEmail || 'Unassigned'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {lead.lastContactedAt ? formatDateShort(lead.lastContactedAt) : 'None'}
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-700">
+                              {lead.priority ?? 'Normal'}
+                            </td>
+                          </tr>
+                        ))}
+                        {crmReport.hotLeadsWithoutFollowUp.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                              No hot leads without follow-up
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            ) : null}
+          </div>
         )}
       </div>
     </ProtectedRoute>

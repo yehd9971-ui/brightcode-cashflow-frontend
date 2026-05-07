@@ -1,47 +1,89 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarPlus,
+  FileText,
+  Phone,
+  Plus,
+  ThumbsDown,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  pullFromPool,
+  addNumber,
   getMyNumbers,
-  getPendingCompletions,
-  pullForCompletion,
-  markNotInterested,
   getNumberDetail,
-  updateLeadStatus,
+  getPendingCompletions,
+  markNotInterested,
+  pullForCompletion,
+  pullFromPool,
   returnToPool,
   scheduleFollowUps,
-  addNumber,
 } from '@/lib/services/client-numbers';
-import { getTodayCallTasks, createCallTask } from '@/lib/services/call-tasks';
-import { getSalesUsers } from '@/lib/services/users';
+import { createCallTask, getOpenTasks } from '@/lib/services/call-tasks';
+import { closeCrmTask, completeCrmTask, getCrmLeads } from '@/lib/services/crm';
+import { getNeedsRetry } from '@/lib/services/calls';
+import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { normalizePhoneNumber } from '@/utils/phone';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { CardSkeleton } from '@/components/ui/Loading';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { CardSkeleton } from '@/components/ui/Loading';
-import { ErrorState } from '@/components/ui/ErrorState';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { NumberDetailCard } from '@/components/numbers/NumberDetailCard';
 import { NumberSearchBar } from '@/components/numbers/NumberSearchBar';
 import { PendingCompletionList } from '@/components/numbers/PendingCompletionList';
-import { LeadStatus, Role, CallTaskStatus } from '@/types/api';
-import type { ClientNumberDto, AddNumberDto, CallTaskResponseDto } from '@/types/api';
-import { startCall, getMyCallStatus } from '@/lib/services/users';
-import { getNeedsRetry } from '@/lib/services/calls';
-import { useRouter } from 'next/navigation';
-import { Phone, Plus, ArrowRight, PhoneCall, FileText, Clock, CalendarPlus, CheckCircle, ThumbsDown, AlertTriangle, Flame } from 'lucide-react';
+import {
+  WorkbenchFilters,
+  WorkbenchLeadItem,
+  WorkbenchLeadRow,
+  WorkbenchSection,
+  WorkbenchTaskRow,
+} from '@/components/numbers/workbench';
+import {
+  AddNumberDto,
+  CallResponseDto,
+  ClientNumberDto,
+  CrmLeadResponseDto,
+  CrmStage,
+  LeadStatus,
+  OpenTaskBucket,
+  OpenTaskResponseDto,
+  Role,
+} from '@/types/api';
 
-// Get today's Egypt date as YYYY-MM-DD
-function getTodayEgypt(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+function priorityValue(value: string) {
+  return value ? Number(value) : undefined;
+}
+
+function formatWait(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+}
+
+function taskMatchesStage(task: OpenTaskResponseDto, stage: string) {
+  if (!stage) return true;
+  return task.clientNumber?.crmStage === stage;
+}
+
+function leadMatchesStage(lead: CrmLeadResponseDto, stage: string) {
+  if (!stage) return true;
+  return lead.stage === stage || lead.crmStage === stage;
+}
+
+function phoneKey(phone?: string) {
+  return normalizePhoneNumber(phone || '');
 }
 
 export default function NumbersPage() {
@@ -50,182 +92,272 @@ export default function NumbersPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === Role.ADMIN;
   const isManager = user?.role === Role.SALES_MANAGER;
-  const canCreateTask = isAdmin || isManager;
+  const canFilterEmployee = Boolean(isAdmin || isManager);
+  const canManagerMutate = Boolean(isAdmin || isManager);
 
-  const [activeTab, setActiveTab] = useState<'today' | 'assigned' | 'hot'>('today');
+  const [activeTab, setActiveTab] = useState<'workbench' | 'assigned'>('workbench');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
+  const [taskToClose, setTaskToClose] = useState<OpenTaskResponseDto | null>(null);
+  const [closeReason, setCloseReason] = useState('');
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
   const [taskForm, setTaskForm] = useState({ phone: '', userId: '', date: '', time: '', notes: '' });
-  const [viewUserId, setViewUserId] = useState<string>('');
-  const isViewingOther = !!viewUserId;
-  const targetUserId = viewUserId || user?.id;
+  const [viewUserId, setViewUserId] = useState('');
+  const [stageFilter, setStageFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+
+  const isViewingOther = Boolean(viewUserId);
+  const workbenchUserId = user?.role === Role.SALES ? user.id : viewUserId || undefined;
+  const numbersUserId = viewUserId || user?.id;
+  const selectedPriority = priorityValue(priorityFilter);
 
   const { data: salesUsers } = useQuery({
     queryKey: ['sales-users'],
     queryFn: getSalesUsers,
-    enabled: isAdmin || isManager,
+    enabled: canFilterEmployee,
   });
 
-  const viewingUserEmail = viewUserId ? salesUsers?.find(u => u.id === viewUserId)?.email : null;
+  const viewingUserEmail = viewUserId ? salesUsers?.find((item) => item.id === viewUserId)?.email : null;
 
-  const { data: myNumbers, isLoading, isError, refetch } = useQuery({
-    queryKey: ['my-numbers', targetUserId],
-    queryFn: () => getMyNumbers({ page: 1, limit: 100, userId: targetUserId }),
-    enabled: !!targetUserId,
+  const { data: myNumbers, isLoading: myNumbersLoading, isError: myNumbersError, refetch: refetchMyNumbers } = useQuery({
+    queryKey: ['my-numbers', numbersUserId],
+    queryFn: () => getMyNumbers({ page: 1, limit: 100, userId: numbersUserId }),
+    enabled: Boolean(numbersUserId),
   });
 
   const { data: pendingCompletions } = useQuery({
-    queryKey: ['pending-completions', targetUserId],
-    queryFn: () => getPendingCompletions(targetUserId),
-    enabled: !!targetUserId,
+    queryKey: ['pending-completions', numbersUserId],
+    queryFn: () => getPendingCompletions(numbersUserId),
+    enabled: Boolean(numbersUserId),
   });
 
   const { data: callStatus } = useQuery({
     queryKey: ['my-call-status'],
     queryFn: getMyCallStatus,
-    refetchInterval: activeTab === 'today' && !isViewingOther ? 15000 : false,
+    refetchInterval: activeTab === 'workbench' && !isViewingOther ? 15000 : false,
     enabled: !isViewingOther,
   });
 
   const isOnCall = !isViewingOther && callStatus?.currentStatus === 'ON_CALL';
   const activeCallPhone = !isViewingOther ? callStatus?.currentCallPhone : undefined;
 
-  const { data: needsRetry } = useQuery({
-    queryKey: ['calls', 'needs-retry', targetUserId],
-    queryFn: () => getNeedsRetry(targetUserId),
-    refetchInterval: activeTab === 'today' ? 30000 : false,
-    enabled: !!targetUserId,
+  const openTasksQuery = useMemo(() => ({
+    bucket: OpenTaskBucket.ALL,
+    page: 1,
+    limit: 100,
+    userId: workbenchUserId,
+    priority: selectedPriority,
+  }), [workbenchUserId, selectedPriority]);
+
+  const {
+    data: openTasks,
+    isLoading: openTasksLoading,
+    isError: openTasksError,
+    refetch: refetchOpenTasks,
+  } = useQuery({
+    queryKey: ['call-tasks', 'open', openTasksQuery],
+    queryFn: () => getOpenTasks(openTasksQuery),
+    refetchInterval: activeTab === 'workbench' ? 30000 : false,
+    enabled: Boolean(user),
   });
 
-  const { data: todayTasks } = useQuery({
-    queryKey: ['call-tasks', 'today', targetUserId],
-    queryFn: () => getTodayCallTasks(targetUserId),
-    refetchInterval: 30000,
-    enabled: !!targetUserId,
+  const crmBaseQuery = useMemo(() => ({
+    page: 1,
+    limit: 100,
+    ownerId: workbenchUserId,
+    priority: selectedPriority,
+  }), [workbenchUserId, selectedPriority]);
+
+  const {
+    data: hotLeads,
+    isLoading: hotLeadsLoading,
+    isError: hotLeadsError,
+    refetch: refetchHotLeads,
+  } = useQuery({
+    queryKey: ['crm', 'leads', 'hot', crmBaseQuery, stageFilter],
+    queryFn: () => getCrmLeads({
+      ...crmBaseQuery,
+      stage: CrmStage.HOT_LEAD,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    }),
+    enabled: Boolean(user),
   });
 
-  // Timer for countdown refresh
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const todayEgypt = getTodayEgypt();
-
-  // Retry wait map
-  const retryWaitMap = new Map<string, number>();
-  needsRetry?.forEach(call => {
-    const minutesLeft = 30 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
-    if (minutesLeft > 0) {
-      retryWaitMap.set(call.clientPhoneNumber, minutesLeft);
-    }
+  const {
+    data: staleLeads,
+    isLoading: staleLeadsLoading,
+    isError: staleLeadsError,
+    refetch: refetchStaleLeads,
+  } = useQuery({
+    queryKey: ['crm', 'leads', 'stale', crmBaseQuery, stageFilter],
+    queryFn: () => getCrmLeads({
+      ...crmBaseQuery,
+      stage: stageFilter ? (stageFilter as CrmStage) : undefined,
+      stale: true,
+      staleDays: 7,
+      sortBy: 'lastContactedAt',
+      sortOrder: 'asc',
+    }),
+    enabled: Boolean(user),
   });
 
-  const formatWait = (mins: number) => {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
-  };
-
-  // Needs-retry phone set (normalized for consistent matching)
-  const retryPhoneSet = useMemo(() => {
-    const set = new Set<string>();
-    needsRetry?.forEach(c => {
-      set.add(normalizePhoneNumber(c.clientPhoneNumber));
-    });
-    return set;
-  }, [needsRetry]);
-
-  // Today's numbers: pulled/added today
-  const todayNumbers = useMemo(() => {
-    if (!myNumbers?.data) return { newNumbers: [] as ClientNumberDto[], calledNumbers: [] as ClientNumberDto[] };
-    const newNums: ClientNumberDto[] = [];
-    const calledNums: ClientNumberDto[] = [];
-    for (const num of myNumbers.data) {
-      // Use updatedAt: when pulled from pool or added, the record is updated today
-      const updatedDate = new Date(num.updatedAt).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
-      if (updatedDate !== todayEgypt) continue;
-      // Skip numbers that are in Needs Retry (they show in their own section)
-      const isInRetry = retryPhoneSet.has(normalizePhoneNumber(num.normalizedPhone));
-      if (isInRetry) continue;
-      const calledToday = num.lastAttemptDate === todayEgypt;
-      if (calledToday) {
-        if (num.assignmentType === 'SELF_ENTERED') continue;
-        calledNums.push(num);
-      } else {
-        newNums.push(num);
-      }
-    }
-    return { newNumbers: newNums, calledNumbers: calledNums };
-  }, [myNumbers?.data, todayEgypt, retryPhoneSet]);
-
-  // Sort tasks
-  const sortedTasks = useMemo(() => {
-    if (!todayTasks) return [];
-    const now = new Date();
-    return [...todayTasks].sort((a, b) => {
-      const aAlerted = new Date(a.scheduledAt) <= now;
-      const bAlerted = new Date(b.scheduledAt) <= now;
-      if (aAlerted && !bAlerted) return -1;
-      if (!aAlerted && bAlerted) return 1;
-      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
-    });
-  }, [todayTasks]);
-
-  // Task badge map for assigned tab
-  const taskByPhone = useMemo(() => {
-    const map = new Map<string, CallTaskResponseDto>();
-    todayTasks?.forEach(task => {
-      if (!map.has(task.clientPhoneNumber)) map.set(task.clientPhoneNumber, task);
-    });
-    return map;
-  }, [todayTasks]);
-
-  // Check if user has any uncalled pool-pulled numbers (blocks pulling another)
-  const uncalledNumbers = useMemo(() => {
-    if (isAdmin) return [];
-    return myNumbers?.data.filter(
-      n => n.assignmentType === 'POOL_PULLED'
-        && !n.lastAttemptDate
-        && n.leadStatus !== LeadStatus.NOT_INTERESTED
-        && n.poolStatus === 'ASSIGNED'
-        // If it's in needs-retry, it WAS called (first NOT_ANSWERED) so don't block
-        && !retryPhoneSet.has(n.phoneNumber)
-        && !retryPhoneSet.has(n.normalizedPhone)
-    ) ?? [];
-  }, [myNumbers?.data, isAdmin, retryPhoneSet]);
-
-  // Hot lead numbers
-  const hotLeadNumbers = useMemo(() => {
-    if (!myNumbers?.data) return [];
-    return myNumbers.data
-      .filter(n => n.leadStatus === LeadStatus.HOT_LEAD)
-      .sort((a, b) => {
-        const aTime = a.leadStatusChangedAt ? new Date(a.leadStatusChangedAt).getTime() : 0;
-        const bTime = b.leadStatusChangedAt ? new Date(b.leadStatusChangedAt).getTime() : 0;
-        return bTime - aTime;
-      });
-  }, [myNumbers?.data]);
-
-  // Count for tabs
-  const todayCount = todayNumbers.newNumbers.length + sortedTasks.length + (needsRetry?.length ?? 0) + (pendingCompletions?.length ?? 0) + todayNumbers.calledNumbers.length;
+  const {
+    data: needsRetry,
+    isLoading: needsRetryLoading,
+    isError: needsRetryError,
+    refetch: refetchNeedsRetry,
+  } = useQuery({
+    queryKey: ['calls', 'needs-retry', workbenchUserId],
+    queryFn: () => getNeedsRetry(workbenchUserId),
+    refetchInterval: activeTab === 'workbench' ? 30000 : false,
+    enabled: Boolean(user),
+  });
 
   const { data: numberDetail } = useQuery({
     queryKey: ['number-detail', selectedNumberId],
     queryFn: () => getNumberDetail(selectedNumberId!),
-    enabled: !!selectedNumberId,
+    enabled: Boolean(selectedNumberId),
   });
 
-  // --- Mutations ---
+  const invalidateWorkbench = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['call-tasks', 'open'] });
+    queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
+    queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+    queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
+    queryClient.invalidateQueries({ queryKey: ['pending-completions'] });
+    queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
+  }, [queryClient]);
+
+  const retryWaitMap = useMemo(() => {
+    const map = new Map<string, string>();
+    needsRetry?.forEach((call) => {
+      const minutesLeft = 30 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
+      if (minutesLeft > 0) {
+        map.set(phoneKey(call.clientPhoneNumber), `Retry in ${formatWait(minutesLeft)}`);
+      }
+    });
+    return map;
+  }, [needsRetry]);
+
+  const numberByPhone = useMemo(() => {
+    const map = new Map<string, ClientNumberDto>();
+    myNumbers?.data.forEach((number) => {
+      map.set(phoneKey(number.phoneNumber), number);
+      map.set(phoneKey(number.normalizedPhone), number);
+    });
+    return map;
+  }, [myNumbers?.data]);
+
+  const retryPhoneSet = useMemo(() => {
+    const set = new Set<string>();
+    needsRetry?.forEach((call) => set.add(phoneKey(call.clientPhoneNumber)));
+    return set;
+  }, [needsRetry]);
+
+  const filteredTasks = useMemo(() => {
+    return (openTasks?.data ?? []).filter((task) => taskMatchesStage(task, stageFilter));
+  }, [openTasks?.data, stageFilter]);
+
+  const overdueTasks = useMemo(() => {
+    return filteredTasks.filter((task) => task.bucket === OpenTaskBucket.OVERDUE || task.isOverdue);
+  }, [filteredTasks]);
+
+  const todayTasks = useMemo(() => {
+    return filteredTasks.filter((task) => task.bucket === OpenTaskBucket.TODAY && !task.isOverdue);
+  }, [filteredTasks]);
+
+  const upcomingTasks = useMemo(() => {
+    return filteredTasks.filter((task) => task.bucket === OpenTaskBucket.UPCOMING);
+  }, [filteredTasks]);
+
+  const hotLeadRows = useMemo<WorkbenchLeadItem[]>(() => {
+    return (hotLeads?.data ?? [])
+      .filter((lead) => leadMatchesStage(lead, stageFilter))
+      .map((lead) => ({
+        id: lead.id,
+        phoneNumber: lead.phoneNumber,
+        clientName: lead.clientName,
+        stage: lead.stage,
+        priority: lead.priority,
+        nextActionAt: lead.nextActionAt,
+        lastContactedAt: lead.lastContactedAt,
+        ownerEmail: lead.owner?.email,
+        meta: lead.nextOpenTask ? `Task at ${lead.nextOpenTask.taskTime}` : undefined,
+        kind: 'hot',
+      }));
+  }, [hotLeads?.data, stageFilter]);
+
+  const staleLeadRows = useMemo<WorkbenchLeadItem[]>(() => {
+    return (staleLeads?.data ?? []).map((lead) => ({
+      id: lead.id,
+      phoneNumber: lead.phoneNumber,
+      clientName: lead.clientName,
+      stage: lead.stage,
+      priority: lead.priority,
+      nextActionAt: lead.nextActionAt,
+      lastContactedAt: lead.lastContactedAt,
+      ownerEmail: lead.owner?.email,
+      meta: lead.totalFailedAttempts ? `Failed attempts: ${lead.totalFailedAttempts}` : undefined,
+      kind: 'stale',
+    }));
+  }, [staleLeads?.data]);
+
+  const retryRows = useMemo<WorkbenchLeadItem[]>(() => {
+    return (needsRetry ?? []).map((call: CallResponseDto) => {
+      const number = numberByPhone.get(phoneKey(call.clientPhoneNumber));
+      return {
+        id: number?.id || call.id,
+        phoneNumber: call.clientPhoneNumber,
+        clientName: number?.clientName,
+        stage: number?.crmStage || number?.leadStatus,
+        priority: number?.priority,
+        lastContactedAt: call.createdAt,
+        ownerEmail: call.user?.email,
+        meta: `First attempt: ${new Date(call.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+        kind: 'retry',
+      };
+    });
+  }, [needsRetry, numberByPhone]);
+
+  const taskByPhone = useMemo(() => {
+    const map = new Map<string, OpenTaskResponseDto>();
+    filteredTasks.forEach((task) => {
+      if (!map.has(phoneKey(task.clientPhoneNumber))) map.set(phoneKey(task.clientPhoneNumber), task);
+      if (!map.has(phoneKey(task.rawPhoneNumber))) map.set(phoneKey(task.rawPhoneNumber), task);
+    });
+    return map;
+  }, [filteredTasks]);
+
+  const uncalledNumbers = useMemo(() => {
+    if (isAdmin) return [];
+    return myNumbers?.data.filter((number) =>
+      number.assignmentType === 'POOL_PULLED' &&
+      !number.lastAttemptDate &&
+      number.leadStatus !== LeadStatus.NOT_INTERESTED &&
+      number.poolStatus === 'ASSIGNED' &&
+      !retryPhoneSet.has(phoneKey(number.phoneNumber)) &&
+      !retryPhoneSet.has(phoneKey(number.normalizedPhone)),
+    ) ?? [];
+  }, [myNumbers?.data, isAdmin, retryPhoneSet]);
+
+  const workbenchCount =
+    overdueTasks.length +
+    todayTasks.length +
+    upcomingTasks.length +
+    retryRows.length +
+    hotLeadRows.length +
+    staleLeadRows.length +
+    (pendingCompletions?.length ?? 0);
+
   const pullMutation = useMutation({
     mutationFn: pullFromPool,
     onSuccess: (data) => {
       toast.success(`Pulled: ${data.phoneNumber}`);
-      setActiveTab('today');
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      setActiveTab('workbench');
+      invalidateWorkbench();
       queryClient.invalidateQueries({ queryKey: ['pool'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'No numbers available'),
@@ -235,8 +367,7 @@ export default function NumbersPage() {
     mutationFn: pullForCompletion,
     onSuccess: () => {
       toast.success('Number pulled for completion');
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
-      queryClient.invalidateQueries({ queryKey: ['pending-completions'] });
+      invalidateWorkbench();
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Cannot complete yet'),
   });
@@ -246,7 +377,7 @@ export default function NumbersPage() {
     onSuccess: () => {
       toast.success('Marked as not interested (pending approval)');
       setSelectedNumberId(null);
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      invalidateWorkbench();
       queryClient.invalidateQueries({ queryKey: ['ni-pending'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
@@ -258,8 +389,8 @@ export default function NumbersPage() {
       toast.success('Number added');
       setShowAddModal(false);
       setAddForm({ phoneNumber: '' });
-      setActiveTab('today');
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      setActiveTab('workbench');
+      invalidateWorkbench();
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to add'),
   });
@@ -268,8 +399,7 @@ export default function NumbersPage() {
     mutationFn: scheduleFollowUps,
     onSuccess: () => {
       toast.success('Follow-ups scheduled');
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
-      queryClient.invalidateQueries({ queryKey: ['call-tasks', 'today'] });
+      invalidateWorkbench();
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
   });
@@ -278,9 +408,8 @@ export default function NumbersPage() {
     mutationFn: returnToPool,
     onSuccess: () => {
       toast.success('Returned to pool');
-      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      invalidateWorkbench();
       queryClient.invalidateQueries({ queryKey: ['pool'] });
-      queryClient.invalidateQueries({ queryKey: ['call-tasks', 'today'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
   });
@@ -292,131 +421,158 @@ export default function NumbersPage() {
       toast.success('Task created');
       setShowTaskModal(false);
       setTaskForm({ phone: '', userId: '', date: '', time: '', notes: '' });
-      queryClient.invalidateQueries({ queryKey: ['call-tasks', 'today'] });
+      invalidateWorkbench();
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to create task'),
   });
 
-  // --- Call button helper ---
-  const renderCallButton = (phoneNumber: string, variant?: 'yellow' | 'orange' | 'default') => {
-    if (isViewingOther) return null;
-    const waitMins = retryWaitMap.get(phoneNumber);
-    if (isOnCall && activeCallPhone === phoneNumber) {
-      return (
-        <Button size="sm" variant="outline" className="border-orange-500 text-orange-700 hover:bg-orange-50"
-          onClick={(e) => { e.stopPropagation(); router.push(`/calls/new?phone=${encodeURIComponent(phoneNumber)}`); }}>
-          <FileText className="w-4 h-4 mr-1" /> Fill Report
-        </Button>
-      );
+  const completeTaskMutation = useMutation({
+    mutationFn: (task: OpenTaskResponseDto) => completeCrmTask(task.id),
+    onSuccess: () => {
+      toast.success('Task completed');
+      invalidateWorkbench();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to complete task'),
+  });
+
+  const closeTaskMutation = useMutation({
+    mutationFn: ({ task, reason }: { task: OpenTaskResponseDto; reason: string }) =>
+      closeCrmTask(task.id, { closedReason: reason }),
+    onSuccess: () => {
+      toast.success('Task closed');
+      setTaskToClose(null);
+      setCloseReason('');
+      invalidateWorkbench();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to close task'),
+  });
+
+  const handleCall = useCallback(async (phoneNumber: string) => {
+    try {
+      await startCall(phoneNumber);
+      window.open(`tel:${phoneNumber}`, '_self');
+      setTimeout(() => {
+        router.push(`/calls/new?phone=${encodeURIComponent(phoneNumber)}`);
+      }, 500);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to start call');
     }
-    if (isOnCall) return null;
-    if (waitMins && waitMins > 0) {
-      return (
-        <Button size="sm" disabled className="opacity-50 cursor-not-allowed">
-          <PhoneCall className="w-4 h-4 mr-1" /> {variant === 'yellow' ? `Call Again (${formatWait(waitMins)})` : `Retry in ${formatWait(waitMins)}`}
-        </Button>
-      );
-    }
-    return (
-      <Button size="sm"
-        className={variant === 'yellow' ? 'bg-yellow-600 hover:bg-yellow-700' : variant === 'orange' ? 'bg-orange-600 hover:bg-orange-700' : ''}
-        onClick={async (e) => {
-          e.stopPropagation();
-          try {
-            await startCall(phoneNumber);
-            window.open(`tel:${phoneNumber}`, '_self');
-            setTimeout(() => { router.push(`/calls/new?phone=${encodeURIComponent(phoneNumber)}`); }, 500);
-          } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to start call'); }
-        }}>
-        <PhoneCall className="w-4 h-4 mr-1" /> {variant === 'yellow' ? 'Call Again' : 'Call'}
-      </Button>
-    );
+  }, [router]);
+
+  const handleFillReport = useCallback((phoneNumber: string) => {
+    router.push(`/calls/new?phone=${encodeURIComponent(phoneNumber)}`);
+  }, [router]);
+
+  const resetFilters = () => {
+    setViewUserId('');
+    setStageFilter('');
+    setPriorityFilter('');
+    setSelectedNumberId(null);
   };
 
-  if (isError) return <ErrorState message="Unable to load data" onRetry={refetch} />;
+  const closeTask = () => {
+    if (!taskToClose || !closeReason.trim()) {
+      toast.error('Close reason is required');
+      return;
+    }
+    closeTaskMutation.mutate({ task: taskToClose, reason: closeReason.trim() });
+  };
+
+  const renderTaskRow = (task: OpenTaskResponseDto) => (
+    <WorkbenchTaskRow
+      key={task.id}
+      task={task}
+      isViewingOther={isViewingOther}
+      isOnCall={Boolean(isOnCall)}
+      activeCallPhone={activeCallPhone}
+      canComplete={canManagerMutate}
+      canClose={canManagerMutate}
+      isBusy={completeTaskMutation.isPending || closeTaskMutation.isPending}
+      onCall={handleCall}
+      onFillReport={handleFillReport}
+      onComplete={(item) => completeTaskMutation.mutate(item)}
+      onClose={(item) => setTaskToClose(item)}
+      onSelectLead={setSelectedNumberId}
+    />
+  );
+
+  const renderLeadRow = (item: WorkbenchLeadItem) => (
+    <WorkbenchLeadRow
+      key={`${item.kind}-${item.id}`}
+      item={item}
+      isViewingOther={isViewingOther}
+      isOnCall={Boolean(isOnCall)}
+      activeCallPhone={activeCallPhone}
+      waitLabel={retryWaitMap.get(phoneKey(item.phoneNumber))}
+      onCall={handleCall}
+      onFillReport={handleFillReport}
+      onSelectLead={setSelectedNumberId}
+    />
+  );
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {isViewingOther ? `${viewingUserEmail}'s Numbers` : 'My Numbers'}
+            {isViewingOther ? `${viewingUserEmail || 'Employee'}'s Numbers` : 'My Numbers'}
           </h1>
-          {(isAdmin || isManager) && salesUsers && (
-            <Select
-              value={viewUserId}
-              onChange={(e) => { setViewUserId(e.target.value); setSelectedNumberId(null); }}
-              options={[
-                { value: '', label: 'My Numbers' },
-                ...salesUsers
-                  .filter(u => u.id !== user?.id && (u.role === 'SALES' || u.role === 'SALES_MANAGER'))
-                  .map(u => ({ value: u.id, label: u.email })),
-              ]}
-            />
-          )}
         </div>
         {!isViewingOther && (
-          <div className="flex gap-2">
-            {canCreateTask && (
+          <div className="flex flex-wrap gap-2">
+            {canManagerMutate && (
               <Button variant="outline" onClick={() => setShowTaskModal(true)}>
-                <CalendarPlus className="w-4 h-4 mr-1" /> Create Task
+                <CalendarPlus className="mr-1 h-4 w-4" /> Create Task
               </Button>
             )}
             <Button variant="outline" onClick={() => setShowAddModal(true)}>
-              <Plus className="w-4 h-4 mr-1" /> Add Number
+              <Plus className="mr-1 h-4 w-4" /> Add Number
             </Button>
             <Button
               onClick={() => pullMutation.mutate()}
               loading={pullMutation.isPending}
               disabled={uncalledNumbers.length > 0}
-              title={uncalledNumbers.length > 0 ? `Call ${uncalledNumbers.map(n => n.phoneNumber).join(', ')} first` : undefined}
+              title={uncalledNumbers.length > 0 ? `Call ${uncalledNumbers.map((n) => n.phoneNumber).join(', ')} first` : undefined}
             >
-              <ArrowRight className="w-4 h-4 mr-1" /> Pull from Pool
+              <ArrowRight className="mr-1 h-4 w-4" /> Pull from Pool
             </Button>
           </div>
         )}
       </div>
 
       {isViewingOther && (
-        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-          <span>Viewing {viewingUserEmail}'s numbers (read-only)</span>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          Viewing {viewingUserEmail || 'selected employee'} in read-only mode.
         </div>
       )}
 
-      {/* Global Number Search */}
       <NumberSearchBar />
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-200">
         <button
-          onClick={() => setActiveTab('today')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'today' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          type="button"
+          onClick={() => setActiveTab('workbench')}
+          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'workbench'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Today's Calls ({todayCount})
+          Workbench ({workbenchCount})
         </button>
         <button
-          onClick={() => setActiveTab('hot')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'hot' ? 'border-amber-600 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Hot Leads ({hotLeadNumbers.length})
-        </button>
-        <button
+          type="button"
           onClick={() => setActiveTab('assigned')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'assigned' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'assigned'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           Assigned Numbers ({myNumbers?.total ?? 0})
         </button>
       </div>
 
-      {isLoading ? <CardSkeleton /> : (<>
-      {/* Number Detail Card (shared) */}
       {selectedNumberId && numberDetail && (
         <NumberDetailCard
           number={numberDetail}
@@ -426,336 +582,316 @@ export default function NumbersPage() {
         />
       )}
 
-      {/* ═══════════════ TODAY'S CALLS TAB ═══════════════ */}
-      {activeTab === 'today' && (
-        <>
-          {/* Active Call Banner */}
+      {activeTab === 'workbench' && (
+        <div className="space-y-4">
           {isOnCall && !isViewingOther && (
-            <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-300 rounded-lg">
+            <div className="flex flex-col gap-3 rounded-lg border border-orange-300 bg-orange-50 p-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
-                <span className="inline-block w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+                <span className="inline-block h-3 w-3 rounded-full bg-orange-500" />
                 <div>
-                  <p className="font-semibold text-orange-800">You have an active call</p>
-                  {activeCallPhone ? (
-                    <p className="text-sm text-orange-600">Number: <span className="font-mono font-bold">{activeCallPhone}</span></p>
-                  ) : (
-                    <p className="text-sm text-orange-600">Please submit your call report to continue</p>
-                  )}
+                  <p className="font-semibold text-orange-800">Active call</p>
+                  <p className="text-sm text-orange-700">
+                    {activeCallPhone ? <span className="font-mono">{activeCallPhone}</span> : 'Report pending'}
+                  </p>
                 </div>
               </div>
               <Button
                 onClick={() => router.push(activeCallPhone ? `/calls/new?phone=${encodeURIComponent(activeCallPhone)}` : '/calls/new')}
                 className="bg-orange-600 hover:bg-orange-700"
               >
-                <FileText className="w-4 h-4 mr-2" /> Fill Report
+                <FileText className="mr-2 h-4 w-4" /> Fill Report
               </Button>
             </div>
           )}
 
-          {/* Uncalled Numbers Blocking Pull */}
           {uncalledNumbers.length > 0 && (
-            <Card title={`Must Call First (${uncalledNumbers.length})`}>
-              <div className="p-3 bg-red-50 border-b border-red-200 text-sm text-red-800">
-                You must call these numbers before pulling a new one from the pool.
-              </div>
+            <Card title={`Must Call First (${uncalledNumbers.length})`} padding="none">
               <div className="divide-y divide-gray-100">
-                {uncalledNumbers.map((num) => (
-                  <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                {uncalledNumbers.map((number) => (
+                  <div key={number.id} className="flex flex-col gap-3 p-3 hover:bg-gray-50 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
                       <div>
-                        <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
-                          {num.phoneNumber}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedNumberId(number.id)}
+                          className="font-mono text-sm font-semibold text-indigo-700 hover:underline"
+                        >
+                          {number.phoneNumber}
                         </button>
-                        {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
+                        {number.clientName && <p className="text-xs text-gray-500">{number.clientName}</p>}
                       </div>
                     </div>
-                    {renderCallButton(num.phoneNumber)}
+                    {!isOnCall && <Button size="sm" onClick={() => handleCall(number.phoneNumber)}>Call</Button>}
                   </div>
                 ))}
               </div>
             </Card>
           )}
 
-          {/* New Numbers (pulled/added today, not yet called) */}
-          {todayNumbers.newNumbers.length > 0 && (
-            <Card title={`New Numbers (${todayNumbers.newNumbers.length})`}>
-              <div className="p-3 bg-green-50 border-b border-green-200 text-sm text-green-800">
-                Numbers pulled or added today. Call them to get started.
-              </div>
-              <div className="divide-y divide-gray-100">
-                {todayNumbers.newNumbers.map((num) => (
-                  <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-green-500" />
-                      <div>
-                        <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
-                          {num.phoneNumber}
-                        </button>
-                        {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
-                      </div>
-                    </div>
-                    {renderCallButton(num.phoneNumber)}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+          <WorkbenchFilters
+            canFilterEmployee={canFilterEmployee}
+            salesUsers={salesUsers}
+            currentUserId={user?.id}
+            viewUserId={viewUserId}
+            stage={stageFilter}
+            priority={priorityFilter}
+            onViewUserChange={(value) => {
+              setViewUserId(value);
+              setSelectedNumberId(null);
+            }}
+            onStageChange={setStageFilter}
+            onPriorityChange={setPriorityFilter}
+            onReset={resetFilters}
+          />
 
-          {/* Today's Callbacks */}
-          {sortedTasks.length > 0 && (
-            <Card title={`Today's Callbacks (${sortedTasks.length})`}>
-              <div className="p-3 bg-blue-50 border-b border-blue-200 text-sm text-blue-800">
-                Scheduled callbacks for today. Orange cards have reached their scheduled time.
-              </div>
-              <div className="divide-y divide-gray-100">
-                {sortedTasks.map((task) => {
-                  const isAlerted = new Date(task.scheduledAt) <= new Date();
-                  return (
-                    <div key={task.id}
-                      className={`flex items-center justify-between p-3 ${isAlerted ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Clock className={`w-4 h-4 ${isAlerted ? 'text-orange-500' : 'text-blue-500'}`} />
-                        <div>
-                          <span className="font-medium text-gray-900">{task.rawPhoneNumber}</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-gray-500">at {task.taskTime}</span>
-                            <Badge variant={isAlerted ? 'warning' : 'info'} className="text-xs">
-                              {isAlerted ? 'NOW' : 'UPCOMING'}
-                            </Badge>
-                            {task.source !== 'MANUAL_SALES' && (
-                              <span className="text-xs text-gray-400">
-                                {task.source === 'FOLLOW_UP' || task.source === 'FOLLOW_UP_AUTO' ? 'Follow-up' : 'Assigned'}
-                              </span>
-                            )}
-                          </div>
-                          {task.notes && <p className="text-xs text-gray-500 mt-0.5">{task.notes}</p>}
-                        </div>
-                      </div>
-                      {renderCallButton(task.clientPhoneNumber, isAlerted ? 'orange' : 'default')}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
+          <div className="grid gap-4 xl:grid-cols-2">
+            <WorkbenchSection
+              title="Overdue"
+              count={overdueTasks.length}
+              testId="workbench-overdue"
+              tone="red"
+              isLoading={openTasksLoading}
+              isError={openTasksError}
+              emptyTitle="No overdue tasks"
+              onRetry={() => refetchOpenTasks()}
+            >
+              {overdueTasks.map(renderTaskRow)}
+            </WorkbenchSection>
 
-          {/* Needs Retry */}
-          {needsRetry && needsRetry.length > 0 && (
-            <Card title={`Needs Retry (${needsRetry.length})`}>
-              <div className="p-3 bg-yellow-50 border-b border-yellow-200 text-sm text-yellow-800">
-                These numbers didn't answer the first call today. Call again with a screenshot to complete.
-              </div>
-              <div className="divide-y divide-gray-100">
-                {needsRetry.map((call) => (
-                  <div key={call.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-yellow-500" />
-                      <div>
-                        <span className="font-medium text-gray-900">{call.clientPhoneNumber}</span>
-                        <p className="text-xs text-gray-500">
-                          First attempt: {new Date(call.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                    {renderCallButton(call.clientPhoneNumber, 'yellow')}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+            <WorkbenchSection
+              title="Due Today"
+              count={todayTasks.length}
+              testId="workbench-today"
+              tone="blue"
+              isLoading={openTasksLoading}
+              isError={openTasksError}
+              emptyTitle="No tasks due today"
+              onRetry={() => refetchOpenTasks()}
+            >
+              {todayTasks.map(renderTaskRow)}
+            </WorkbenchSection>
 
-          {/* Pending Completions */}
+            <WorkbenchSection
+              title="Upcoming"
+              count={upcomingTasks.length}
+              testId="workbench-upcoming"
+              tone="green"
+              isLoading={openTasksLoading}
+              isError={openTasksError}
+              emptyTitle="No upcoming tasks"
+              onRetry={() => refetchOpenTasks()}
+            >
+              {upcomingTasks.map(renderTaskRow)}
+            </WorkbenchSection>
+
+            <WorkbenchSection
+              title="Needs Retry"
+              count={retryRows.length}
+              testId="workbench-needs-retry"
+              tone="amber"
+              isLoading={needsRetryLoading}
+              isError={needsRetryError}
+              emptyTitle="No retries waiting"
+              onRetry={() => refetchNeedsRetry()}
+            >
+              {retryRows.map(renderLeadRow)}
+            </WorkbenchSection>
+
+            <WorkbenchSection
+              title="Hot Leads"
+              count={hotLeadRows.length}
+              testId="workbench-hot-leads"
+              tone="amber"
+              isLoading={hotLeadsLoading}
+              isError={hotLeadsError}
+              emptyTitle="No hot leads"
+              onRetry={() => refetchHotLeads()}
+            >
+              {hotLeadRows.map(renderLeadRow)}
+            </WorkbenchSection>
+
+            <WorkbenchSection
+              title="Stale Leads"
+              count={staleLeadRows.length}
+              testId="workbench-stale-leads"
+              tone="gray"
+              isLoading={staleLeadsLoading}
+              isError={staleLeadsError}
+              emptyTitle="No stale leads"
+              onRetry={() => refetchStaleLeads()}
+            >
+              {staleLeadRows.map(renderLeadRow)}
+            </WorkbenchSection>
+          </div>
+
           {pendingCompletions && pendingCompletions.length > 0 && (
             <PendingCompletionList
               numbers={pendingCompletions}
               onComplete={(id) => completionMutation.mutate(id)}
             />
           )}
-
-          {/* Called Today */}
-          {todayNumbers.calledNumbers.length > 0 && (
-            <Card title={`Called (${todayNumbers.calledNumbers.length})`}>
-              <div className="divide-y divide-gray-100">
-                {todayNumbers.calledNumbers.map((num) => (
-                  <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-gray-700 hover:underline">
-                            {num.phoneNumber}
-                          </button>
-                          <Badge variant="success" className="text-xs">Called</Badge>
-                        </div>
-                        {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      {renderCallButton(num.phoneNumber)}
-                      {!isViewingOther && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                          onClick={() => notInterestedMutation.mutate(num.id)}
-                          loading={notInterestedMutation.isPending}
-                        >
-                          <ThumbsDown className="w-4 h-4 mr-1" /> Not Interested
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* Empty state */}
-          {todayCount === 0 && !isOnCall && (
-            <Card>
-              <EmptyState title="No calls for today" description="Pull from the pool or add a number to get started." />
-            </Card>
-          )}
-        </>
+        </div>
       )}
 
-      {/* ═══════════════ HOT LEADS TAB ═══════════════ */}
-      {activeTab === 'hot' && (
+      {activeTab === 'assigned' && (
         <>
-          {hotLeadNumbers.length > 0 ? (
-            <Card title={`Hot Leads (${hotLeadNumbers.length})`}>
-              <div className="p-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
-                Numbers marked as Hot Lead during call reports. Follow up quickly for best results.
-              </div>
+          {myNumbersError ? (
+            <ErrorState message="Unable to load assigned numbers" onRetry={() => refetchMyNumbers()} />
+          ) : myNumbersLoading ? (
+            <CardSkeleton />
+          ) : (
+            <Card title={`Assigned Numbers (${myNumbers?.total ?? 0})`} padding="none">
               <div className="divide-y divide-gray-100">
-                {hotLeadNumbers.map((num) => {
-                  const daysSince = num.leadStatusChangedAt
-                    ? Math.floor((Date.now() - new Date(num.leadStatusChangedAt).getTime()) / 86400000)
-                    : null;
-                  const daysLabel = daysSince === null ? '' : daysSince === 0 ? 'Today' : daysSince === 1 ? '1 day ago' : `${daysSince} days ago`;
-                  const taskForNum = taskByPhone.get(num.phoneNumber);
+                {myNumbers?.data.map((number) => {
+                  const taskForNumber =
+                    taskByPhone.get(phoneKey(number.phoneNumber)) ||
+                    taskByPhone.get(phoneKey(number.normalizedPhone));
                   return (
-                    <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                      <div className="flex items-center gap-3">
-                        <Flame className="w-4 h-4 text-amber-500" />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
-                              {num.phoneNumber}
-                            </button>
-                            <Badge variant="warning" className="text-xs">HOT LEAD</Badge>
-                            {daysLabel && <span className="text-xs text-gray-400">{daysLabel}</span>}
-                          </div>
-                          {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
-                          {taskForNum && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 mt-0.5">
-                              <Clock className="w-3 h-3" /> Task at {taskForNum.taskTime}
-                            </span>
+                    <div key={number.id} className="flex flex-col gap-3 p-3 hover:bg-gray-50 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <button
+                            type="button"
+                            onClick={() => setSelectedNumberId(number.id)}
+                            className="font-mono text-sm font-semibold text-indigo-700 hover:underline"
+                          >
+                            {number.phoneNumber}
+                          </button>
+                          {taskForNumber && (
+                            <Badge variant={taskForNumber.isOverdue ? 'error' : 'warning'} size="sm">
+                              {taskForNumber.isOverdue ? 'Overdue' : `Task ${taskForNumber.taskTime}`}
+                            </Badge>
                           )}
                         </div>
+                        {number.clientName && <p className="mt-1 text-xs text-gray-500">{number.clientName}</p>}
                       </div>
-                      <div className="flex gap-1">
-                        {renderCallButton(num.phoneNumber)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={
+                            number.leadStatus === LeadStatus.SOLD
+                              ? 'success'
+                              : number.leadStatus === LeadStatus.NOT_INTERESTED
+                                ? 'error'
+                                : number.leadStatus === LeadStatus.HOT_LEAD
+                                  ? 'warning'
+                                  : 'info'
+                          }
+                        >
+                          {number.leadStatus.replace(/_/g, ' ')}
+                        </Badge>
+                        <span className="text-xs text-gray-400">Fails: {number.totalFailedAttempts}</span>
+                        {!isViewingOther && !isOnCall && (
+                          <Button size="sm" onClick={() => handleCall(number.phoneNumber)}>Call</Button>
+                        )}
+                        {!isViewingOther && number.leadStatus === LeadStatus.NEW && (
+                          <Button variant="outline" size="sm" onClick={() => followUpMutation.mutate(number.id)}>Follow Up</Button>
+                        )}
                         {!isViewingOther && (
-                          <Button variant="outline" size="sm" onClick={() => followUpMutation.mutate(num.id)}>Follow Up</Button>
+                          <Button variant="outline" size="sm" onClick={() => returnMutation.mutate(number.id)}>Return</Button>
+                        )}
+                        {!isViewingOther && number.leadStatus !== LeadStatus.NOT_INTERESTED && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                            onClick={() => notInterestedMutation.mutate(number.id)}
+                            loading={notInterestedMutation.isPending}
+                          >
+                            <ThumbsDown className="mr-1 h-4 w-4" /> Not Interested
+                          </Button>
                         )}
                       </div>
                     </div>
                   );
                 })}
+                {(!myNumbers?.data || myNumbers.data.length === 0) && (
+                  <div className="p-4">
+                    <EmptyState title="No assigned numbers" description="Pull from the pool or add a number." />
+                  </div>
+                )}
               </div>
-            </Card>
-          ) : (
-            <Card>
-              <EmptyState
-                title="No hot leads"
-                description="Mark interested clients as Hot Lead during call reports."
-              />
             </Card>
           )}
         </>
       )}
 
-      {/* ═══════════════ ASSIGNED NUMBERS TAB ═══════════════ */}
-      {activeTab === 'assigned' && (
-        <Card title={`Assigned Numbers (${myNumbers?.total ?? 0})`}>
-          <div className="divide-y divide-gray-100">
-            {myNumbers?.data.map((num: ClientNumberDto) => {
-              const taskForNum = taskByPhone.get(num.phoneNumber);
-              return (
-                <div key={num.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <Phone className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setSelectedNumberId(num.id)} className="font-medium text-indigo-600 hover:underline">
-                          {num.phoneNumber}
-                        </button>
-                        {taskForNum && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
-                            <Clock className="w-3 h-3" /> Task at {taskForNum.taskTime}
-                          </span>
-                        )}
-                      </div>
-                      {num.clientName && <p className="text-xs text-gray-500">{num.clientName}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={num.leadStatus === LeadStatus.SOLD ? 'success' : num.leadStatus === LeadStatus.NOT_INTERESTED ? 'error' : num.leadStatus === LeadStatus.HOT_LEAD ? 'warning' : 'info'}>
-                      {num.leadStatus.replace(/_/g, ' ')}
-                    </Badge>
-                    <span className="text-xs text-gray-400">Fails: {num.totalFailedAttempts}</span>
-                    <div className="flex gap-1">
-                      {renderCallButton(num.phoneNumber)}
-                      {!isViewingOther && num.leadStatus === LeadStatus.NEW && (
-                        <Button variant="outline" size="sm" onClick={() => followUpMutation.mutate(num.id)}>Follow Up</Button>
-                      )}
-                      {!isViewingOther && (
-                        <Button variant="outline" size="sm" onClick={() => returnMutation.mutate(num.id)}>Return</Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {(!myNumbers?.data || myNumbers.data.length === 0) && (
-              <p className="p-4 text-gray-500 text-center">No assigned numbers. Pull from the pool to get started.</p>
-            )}
-          </div>
-        </Card>
-      )}
-
-      </>)}
-
-      {/* ═══════════════ MODALS ═══════════════ */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Number">
         <div className="space-y-4">
-          <Input label="Phone Number" value={addForm.phoneNumber} onChange={(e) => setAddForm({ ...addForm, phoneNumber: e.target.value })} placeholder="+201234567890" required />
-          <Input label="Client Name" value={addForm.clientName || ''} onChange={(e) => setAddForm({ ...addForm, clientName: e.target.value })} />
-          <Input label="Source" value={addForm.source || ''} onChange={(e) => setAddForm({ ...addForm, source: e.target.value })} />
-          <Button onClick={() => { if (!addForm.phoneNumber.trim()) { toast.error('Phone number is required'); return; } addMutation.mutate(addForm); }} loading={addMutation.isPending} fullWidth>Add</Button>
+          <Input
+            label="Phone Number"
+            value={addForm.phoneNumber}
+            onChange={(event) => setAddForm({ ...addForm, phoneNumber: event.target.value })}
+            placeholder="+201234567890"
+            required
+          />
+          <Input
+            label="Client Name"
+            value={addForm.clientName || ''}
+            onChange={(event) => setAddForm({ ...addForm, clientName: event.target.value })}
+          />
+          <Input
+            label="Source"
+            value={addForm.source || ''}
+            onChange={(event) => setAddForm({ ...addForm, source: event.target.value })}
+          />
+          <Button
+            onClick={() => {
+              if (!addForm.phoneNumber.trim()) {
+                toast.error('Phone number is required');
+                return;
+              }
+              addMutation.mutate(addForm);
+            }}
+            loading={addMutation.isPending}
+            fullWidth
+          >
+            Add
+          </Button>
         </div>
       </Modal>
 
       <Modal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} title="Create Task">
         <div className="space-y-4">
-          <Input label="Phone Number" value={taskForm.phone} onChange={(e) => setTaskForm({ ...taskForm, phone: e.target.value })} placeholder="01xxxxxxxxx" required />
-          {canCreateTask && salesUsers && (
+          <Input
+            label="Phone Number"
+            value={taskForm.phone}
+            onChange={(event) => setTaskForm({ ...taskForm, phone: event.target.value })}
+            placeholder="01xxxxxxxxx"
+            required
+          />
+          {canManagerMutate && salesUsers && (
             <Select
               label="Assign To"
               value={taskForm.userId}
-              onChange={(e) => setTaskForm({ ...taskForm, userId: e.target.value })}
+              onChange={(event) => setTaskForm({ ...taskForm, userId: event.target.value })}
               options={[
                 { value: '', label: 'Self' },
-                ...salesUsers.map((u) => ({ value: u.id, label: u.email })),
+                ...salesUsers.map((item) => ({ value: item.id, label: item.email })),
               ]}
             />
           )}
-          <Input label="Date" type="date" value={taskForm.date} onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })} required />
-          <Input label="Time" type="time" value={taskForm.time} onChange={(e) => setTaskForm({ ...taskForm, time: e.target.value })} required />
-          <Textarea label="Notes" value={taskForm.notes} onChange={(e) => setTaskForm({ ...taskForm, notes: e.target.value })} placeholder="Optional notes..." />
+          <Input
+            label="Date"
+            type="date"
+            value={taskForm.date}
+            onChange={(event) => setTaskForm({ ...taskForm, date: event.target.value })}
+            required
+          />
+          <Input
+            label="Time"
+            type="time"
+            value={taskForm.time}
+            onChange={(event) => setTaskForm({ ...taskForm, time: event.target.value })}
+            required
+          />
+          <Textarea
+            label="Notes"
+            value={taskForm.notes}
+            onChange={(event) => setTaskForm({ ...taskForm, notes: event.target.value })}
+            placeholder="Optional notes..."
+          />
           <Button
             onClick={() => createTaskMutation.mutate({
               clientPhoneNumber: taskForm.phone,
@@ -769,6 +905,27 @@ export default function NumbersPage() {
             fullWidth
           >
             Create Task
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={Boolean(taskToClose)} onClose={() => setTaskToClose(null)} title="Close Task">
+        <div className="space-y-4">
+          <Textarea
+            id="closeReason"
+            label="Close Reason"
+            value={closeReason}
+            onChange={(event) => setCloseReason(event.target.value)}
+            placeholder="Reason"
+            required
+          />
+          <Button
+            onClick={closeTask}
+            loading={closeTaskMutation.isPending}
+            disabled={!closeReason.trim()}
+            fullWidth
+          >
+            Close Task
           </Button>
         </div>
       </Modal>

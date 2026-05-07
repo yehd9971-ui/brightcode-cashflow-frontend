@@ -4,6 +4,8 @@ import {
   CallTaskQueryDto,
   CallTaskResponseDto,
   CallTaskList,
+  OpenTasksQueryDto,
+  OpenTasksResponseDto,
 } from '@/types/api';
 
 export async function getCallTasks(query?: CallTaskQueryDto): Promise<CallTaskList> {
@@ -23,6 +25,11 @@ export async function getCallTaskById(id: string): Promise<CallTaskResponseDto> 
 
 export async function getTodayCallTasks(userId?: string): Promise<CallTaskResponseDto[]> {
   const response = await api.get<CallTaskResponseDto[]>('/call-tasks/today', { params: userId ? { userId } : undefined });
+  return response.data;
+}
+
+export async function getOpenTasks(query?: OpenTasksQueryDto): Promise<OpenTasksResponseDto> {
+  const response = await api.get<OpenTasksResponseDto>('/call-tasks/open', { params: query });
   return response.data;
 }
 

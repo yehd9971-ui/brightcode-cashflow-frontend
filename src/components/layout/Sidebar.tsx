@@ -106,6 +106,13 @@ const navItems: NavItem[] = [
     exact: true,
   },
   {
+    label: 'CRM Pipeline',
+    href: '/crm/pipeline',
+    icon: LayoutDashboard,
+    roles: [Role.ADMIN, Role.SALES_MANAGER],
+    exact: true,
+  },
+  {
     label: 'My Deals',
     href: '/deals',
     icon: Handshake,
