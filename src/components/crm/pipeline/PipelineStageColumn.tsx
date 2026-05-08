@@ -29,7 +29,10 @@ export function PipelineStageColumn({
   onMoveStage,
   onPageChange,
 }: PipelineStageColumnProps) {
-  const canPage = count > 0;
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, page), safeTotalPages);
+  const canPageBack = count > 0 && safePage > 1;
+  const canPageForward = count > 0 && safePage < safeTotalPages;
 
   return (
     <section
@@ -63,34 +66,32 @@ export function PipelineStageColumn({
           ))
         )}
       </div>
-      {canPage && (
-        <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3 py-2">
-          <button
-            type="button"
-            data-testid={`pipeline-stage-${stage}-prev`}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={page <= 1}
-            onClick={() => onPageChange(stage, Math.max(1, page - 1))}
-          >
-            Previous
-          </button>
-          <span
-            data-testid={`pipeline-stage-${stage}-page`}
-            className="shrink-0 text-xs font-medium text-gray-600"
-          >
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            data-testid={`pipeline-stage-${stage}-next`}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(stage, Math.min(totalPages, page + 1))}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-3 py-2">
+        <button
+          type="button"
+          data-testid={`pipeline-stage-${stage}-prev`}
+          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canPageBack}
+          onClick={() => onPageChange(stage, Math.max(1, safePage - 1))}
+        >
+          Previous
+        </button>
+        <span
+          data-testid={`pipeline-stage-${stage}-page`}
+          className="shrink-0 text-xs font-medium text-gray-600"
+        >
+          Page {safePage} of {safeTotalPages}
+        </span>
+        <button
+          type="button"
+          data-testid={`pipeline-stage-${stage}-next`}
+          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canPageForward}
+          onClick={() => onPageChange(stage, Math.min(safeTotalPages, safePage + 1))}
+        >
+          Next
+        </button>
+      </div>
     </section>
   );
 }
