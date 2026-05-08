@@ -70,6 +70,18 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker pull ghcr.io/${{ github.repository }}:latest
 
+            # Remove any stale frontend container still registered for drafif.cloud.
+            # nginx-proxy can keep routing to old containers if they share VIRTUAL_HOST.
+            for container_id in $(docker ps -aq); do
+              if docker inspect "$container_id" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'VIRTUAL_HOST=drafif.cloud'; then
+                container_name=$(docker inspect "$container_id" --format '{{.Name}}' | sed 's#^/##')
+                if [ "$container_name" != "cashflow-frontend" ]; then
+                  echo "Removing stale drafif.cloud frontend container: $container_name"
+                  docker rm -f "$container_id" || true
+                fi
+              fi
+            done
+
             # Create project directory if it doesn't exist
             mkdir -p /opt/brightfrontnew
 
@@ -113,7 +125,7 @@ jobs:
             EOF
 
             # Start the new container
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             # Clean up old images
             docker image prune -f
