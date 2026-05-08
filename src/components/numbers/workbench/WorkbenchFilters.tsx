@@ -3,12 +3,13 @@
 import { Filter } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { CrmStage, Role, UserResponseDto } from '@/types/api';
+import { Role, UserResponseDto } from '@/types/api';
+import { CRM_STAGE_OPTIONS } from '@/lib/crm-stages';
 
 interface WorkbenchFiltersProps {
   canFilterEmployee: boolean;
   salesUsers?: UserResponseDto[];
-  currentUserId?: string;
+  currentUser?: UserResponseDto | null;
   viewUserId: string;
   stage: string;
   priority: string;
@@ -20,10 +21,7 @@ interface WorkbenchFiltersProps {
 
 const stageOptions = [
   { value: '', label: 'All stages' },
-  ...Object.values(CrmStage).map((stage) => ({
-    value: stage,
-    label: stage.replace(/_/g, ' '),
-  })),
+  ...CRM_STAGE_OPTIONS,
 ];
 
 const priorityOptions = [
@@ -37,7 +35,7 @@ const priorityOptions = [
 export function WorkbenchFilters({
   canFilterEmployee,
   salesUsers,
-  currentUserId,
+  currentUser,
   viewUserId,
   stage,
   priority,
@@ -46,11 +44,17 @@ export function WorkbenchFilters({
   onPriorityChange,
   onReset,
 }: WorkbenchFiltersProps) {
+  const employeeMap = new Map<string, UserResponseDto>();
+  if (currentUser?.role === Role.SALES || currentUser?.role === Role.SALES_MANAGER) {
+    employeeMap.set(currentUser.id, currentUser);
+  }
+  (salesUsers ?? [])
+    .filter((item) => item.role === Role.SALES || item.role === Role.SALES_MANAGER)
+    .forEach((item) => employeeMap.set(item.id, item));
+
   const employeeOptions = [
     { value: '', label: 'All employees' },
-    ...(salesUsers ?? [])
-      .filter((item) => item.id !== currentUserId && (item.role === Role.SALES || item.role === Role.SALES_MANAGER))
-      .map((item) => ({ value: item.id, label: item.email })),
+    ...Array.from(employeeMap.values()).map((item) => ({ value: item.id, label: item.email })),
   ];
 
   return (

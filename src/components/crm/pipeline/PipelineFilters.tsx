@@ -6,6 +6,7 @@ import { Role, UserResponseDto } from '@/types/api';
 
 interface PipelineFiltersProps {
   users: UserResponseDto[];
+  currentUser?: UserResponseDto | null;
   ownerId: string;
   priority: string;
   onOwnerChange: (value: string) => void;
@@ -22,16 +23,23 @@ const priorityOptions = [
 
 export function PipelineFilters({
   users,
+  currentUser,
   ownerId,
   priority,
   onOwnerChange,
   onPriorityChange,
 }: PipelineFiltersProps) {
+  const employeeMap = new Map<string, UserResponseDto>();
+  if (currentUser?.role === Role.SALES || currentUser?.role === Role.SALES_MANAGER) {
+    employeeMap.set(currentUser.id, currentUser);
+  }
+  users
+    .filter((user) => user.role === Role.SALES || user.role === Role.SALES_MANAGER)
+    .forEach((user) => employeeMap.set(user.id, user));
+
   const employeeOptions = [
     { value: '', label: 'All employees' },
-    ...users
-      .filter((user) => user.role === Role.SALES || user.role === Role.SALES_MANAGER)
-      .map((user) => ({ value: user.id, label: user.email })),
+    ...Array.from(employeeMap.values()).map((user) => ({ value: user.id, label: user.email })),
   ];
 
   return (

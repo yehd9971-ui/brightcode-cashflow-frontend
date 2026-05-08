@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import {
   clearActiveCallWithReportApi,
   createCrmLeadTaskApi,
+  deleteCrmLeadApi,
+  ensureClientNumberApi,
   updateCrmLeadStageApi,
 } from '../helpers/api-client';
 import { loginApiByRole, newContextForRole } from '../helpers/auth-roles';
@@ -69,6 +71,52 @@ test.describe('Lead detail drawer UI', () => {
     await context.close();
   });
 
+  test('lead detail shows sales notes, lets admin delete, and hides delete from manager', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const note = `${TEST_RUN_PREFIX} sales note`;
+    const lead = await ensureClientNumberApi(
+      {
+        phoneNumber: uniqueTestPhone(Date.now() + 701),
+        clientName: `${TEST_RUN_PREFIX} notes client`,
+        source: 'Playwright',
+        notes: note,
+      },
+      admin.accessToken,
+    );
+    await updateCrmLeadStageApi(lead.id, { stage: 'NEW', priority: 2 }, admin.accessToken);
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const detail = new LeadDetailPage(page);
+    await detail.openDirect(lead.id);
+
+    await expect(detail.notes).toContainText(note);
+    await expect(detail.deleteButton).toBeVisible();
+    await detail.deleteButton.click();
+    const deleteDialog = page.locator('[role="dialog"]').filter({ hasText: 'Delete Lead' });
+    await deleteDialog.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('Lead deleted')).toBeVisible({ timeout: 10_000 });
+    await expect(detail.drawer).toHaveCount(0);
+    await context.close();
+
+    const managerLead = await ensureClientNumberApi(
+      {
+        phoneNumber: uniqueTestPhone(Date.now() + 702),
+        clientName: `${TEST_RUN_PREFIX} manager no delete`,
+        source: 'Playwright',
+      },
+      admin.accessToken,
+    );
+    await updateCrmLeadStageApi(managerLead.id, { stage: 'NEW', priority: 2 }, admin.accessToken);
+
+    const { context: managerContext, page: managerPage } = await newContextForRole(browser, 'SALES_MANAGER');
+    const managerDetail = new LeadDetailPage(managerPage);
+    await managerDetail.openDirect(managerLead.id);
+    await expect(managerDetail.deleteButton).toHaveCount(0);
+    await managerContext.close();
+
+    await deleteCrmLeadApi(managerLead.id, admin.accessToken);
+  });
+
   test('lead detail changes stage, marks sold, and marks lost with reason', async ({ browser }) => {
     const admin = await loginApiByRole('ADMIN');
     const lead = await createLead(admin.accessToken, 'NEW');
@@ -99,7 +147,7 @@ test.describe('Lead detail drawer UI', () => {
   test('lead detail call button opens the local call report flow', async ({ browser }) => {
     const admin = await loginApiByRole('ADMIN');
     await clearActiveCallWithReportApi(admin.accessToken);
-    const lead = await createLead(admin.accessToken, 'CONTACTED');
+    const lead = await createLead(admin.accessToken, 'NOT_ANSWERED');
 
     const { context, page } = await newContextForRole(browser, 'ADMIN');
     const detail = new LeadDetailPage(page);

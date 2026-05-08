@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { CrmLeadResponseDto } from '@/types/api';
+import { crmStageLabel } from '@/lib/crm-stages';
 
 interface PipelinePreviewModalProps {
   lead: CrmLeadResponseDto | null;
@@ -36,7 +37,7 @@ export function PipelinePreviewModal({ lead, onClose }: PipelinePreviewModalProp
             <p className="text-sm text-gray-500">{lead.clientName || 'Unnamed client'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="info" size="sm">{lead.stage.replace(/_/g, ' ')}</Badge>
+            <Badge variant="info" size="sm">{crmStageLabel(lead.stage)}</Badge>
             <Badge variant={lead.priority && lead.priority >= 3 ? 'warning' : 'neutral'} size="sm">
               {priorityLabel(lead.priority)}
             </Badge>

@@ -4,6 +4,7 @@ import { CheckCircle, Clock, PhoneCall, XCircle, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { CrmStage, OpenTaskBucket, OpenTaskResponseDto } from '@/types/api';
+import { crmStageLabel } from '@/lib/crm-stages';
 import { cn } from '@/utils/cn';
 
 interface WorkbenchTaskRowProps {
@@ -39,7 +40,7 @@ function displayDateTime(value?: string) {
 }
 
 function stageLabel(stage?: CrmStage) {
-  return stage ? stage.replace(/_/g, ' ') : 'No stage';
+  return stage ? crmStageLabel(stage) : 'No stage';
 }
 
 function priorityLabel(priority?: number) {

@@ -79,7 +79,7 @@ export async function getPoolStats(token: string) {
 }
 
 export async function createClientNumberApi(
-  data: { phoneNumber: string; clientName?: string; source?: string },
+  data: { phoneNumber: string; clientName?: string; source?: string; notes?: string },
   token: string,
 ) {
   return api('/client-numbers', {
@@ -90,7 +90,7 @@ export async function createClientNumberApi(
 }
 
 export async function ensureClientNumberApi(
-  data: { phoneNumber: string; clientName?: string; source?: string },
+  data: { phoneNumber: string; clientName?: string; source?: string; notes?: string },
   token: string,
 ) {
   const created = await createClientNumberApi(data, token).catch(() => null);
@@ -236,6 +236,7 @@ export async function getCrmLeadApi(numberId: string, token: string) {
     id: string;
     phoneNumber: string;
     stage: string;
+    notes?: string;
     nextOpenTask?: { id: string; status: string; scheduledAt: string; notes?: string };
     recentTasks: Array<{
       id: string;
@@ -248,6 +249,13 @@ export async function getCrmLeadApi(numberId: string, token: string) {
     }>;
     followUps: Array<{ id: string; status: string; scheduledDate?: string; completedAt?: string }>;
   }>;
+}
+
+export async function deleteCrmLeadApi(numberId: string, token: string) {
+  return api(`/crm/leads/${numberId}`, {
+    method: 'DELETE',
+    token,
+  });
 }
 
 export async function getCrmLeadTimelineApi(

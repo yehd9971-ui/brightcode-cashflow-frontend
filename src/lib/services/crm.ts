@@ -39,6 +39,10 @@ export async function updateCrmLeadStage(
   return response.data;
 }
 
+export async function deleteCrmLead(id: string): Promise<void> {
+  await api.delete(`/crm/leads/${id}`);
+}
+
 export async function createCrmLeadTask(
   id: string,
   data: CreateCrmLeadTaskDto,

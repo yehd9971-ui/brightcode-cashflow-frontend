@@ -1,9 +1,10 @@
 'use client';
 
-import { AlertTriangle, CalendarClock, Clock, Flame, Phone } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Clock, Flame, Phone, PhoneOff } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { CrmLeadResponseDto, CrmStage } from '@/types/api';
+import { CallStatus, CrmLeadResponseDto, CrmStage } from '@/types/api';
+import { crmStageLabel } from '@/lib/crm-stages';
 import { cn } from '@/utils/cn';
 
 interface PipelineLeadCardProps {
@@ -12,10 +13,6 @@ interface PipelineLeadCardProps {
   isUpdating: boolean;
   onPreview: (lead: CrmLeadResponseDto) => void;
   onMoveStage: (lead: CrmLeadResponseDto, stage: CrmStage) => void;
-}
-
-function stageLabel(stage: CrmStage | string) {
-  return String(stage).replace(/_/g, ' ');
 }
 
 function priorityLabel(priority?: number) {
@@ -53,6 +50,8 @@ export function PipelineLeadCard({
 }: PipelineLeadCardProps) {
   const stale = isStale(lead.lastContactedAt);
   const actionWarning = nextActionWarning(lead.nextActionAt);
+  const lastCallNoAnswer =
+    lead.stage !== CrmStage.NOT_ANSWERED && lead.lastCall?.callStatus === CallStatus.NOT_ANSWERED;
 
   return (
     <div
@@ -60,6 +59,7 @@ export function PipelineLeadCard({
       data-phone={lead.phoneNumber}
       className={cn(
         'rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors hover:border-blue-300',
+        lastCallNoAnswer && 'border-red-300 bg-red-50/50 hover:border-red-400',
         isUpdating && 'opacity-70'
       )}
     >
@@ -88,6 +88,11 @@ export function PipelineLeadCard({
             <Flame className="mr-1 h-3 w-3" /> Hot Lead
           </Badge>
         )}
+        {lastCallNoAnswer && (
+          <Badge variant="error" size="sm">
+            <PhoneOff className="mr-1 h-3 w-3" /> Last call: No answer
+          </Badge>
+        )}
         {stale && (
           <Badge variant="error" size="sm">
             <Clock className="mr-1 h-3 w-3" /> Stale
@@ -113,7 +118,7 @@ export function PipelineLeadCard({
           aria-label={`Move stage ${lead.phoneNumber}`}
           value={lead.stage}
           disabled={isUpdating}
-          options={stages.map((stage) => ({ value: stage, label: stageLabel(stage) }))}
+          options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
           onChange={(event) => onMoveStage(lead, event.target.value as CrmStage)}
         />
       </div>

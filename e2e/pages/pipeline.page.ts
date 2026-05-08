@@ -34,6 +34,14 @@ export class PipelinePage {
     return this.page.getByLabel(`Move stage ${phone}`);
   }
 
+  stagePage(stage: string) {
+    return this.page.getByTestId(`pipeline-stage-${stage}-page`);
+  }
+
+  nextStagePage(stage: string) {
+    return this.page.getByTestId(`pipeline-stage-${stage}-next`);
+  }
+
   preview() {
     return this.page.getByTestId('lead-detail-drawer');
   }

@@ -107,7 +107,7 @@ export default function NumbersPage() {
   const [stageFilter, setStageFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
 
-  const isViewingOther = Boolean(viewUserId);
+  const isViewingOther = Boolean(viewUserId && viewUserId !== user?.id);
   const workbenchUserId = user?.role === Role.SALES ? user.id : viewUserId || undefined;
   const numbersUserId = viewUserId || user?.id;
   const selectedPriority = priorityValue(priorityFilter);
@@ -632,7 +632,7 @@ export default function NumbersPage() {
           <WorkbenchFilters
             canFilterEmployee={canFilterEmployee}
             salesUsers={salesUsers}
-            currentUserId={user?.id}
+            currentUser={user}
             viewUserId={viewUserId}
             stage={stageFilter}
             priority={priorityFilter}

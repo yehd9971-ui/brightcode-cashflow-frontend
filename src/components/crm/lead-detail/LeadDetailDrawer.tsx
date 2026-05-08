@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Tag,
+  Trash2,
   X,
   XCircle,
 } from 'lucide-react';
@@ -20,18 +21,20 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   closeCrmTask,
   createCrmLeadTask,
+  deleteCrmLead,
   getCrmLead,
   getCrmLeadTimeline,
   updateCrmLeadStage,
 } from '@/lib/services/crm';
 import { getMyCallStatus, startCall } from '@/lib/services/users';
+import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
 import {
   CallTaskStatus,
   CreateCrmLeadTaskDto,
@@ -46,12 +49,15 @@ interface LeadDetailDrawerProps {
   leadId: string | null;
   stages?: CrmStage[];
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
 const TIMELINE_QUERY = { page: 1, limit: 50, order: 'desc' as const };
 
 function stageLabel(stage?: CrmStage | string) {
-  return stage ? String(stage).replace(/_/g, ' ') : 'Unknown';
+  if (!stage) return 'Unknown';
+  if (stage === CrmStage.NOT_ANSWERED || stage === 'NOT_ANSWERED') return crmStageLabel(stage);
+  return String(stage).replace(/_/g, ' ');
 }
 
 function priorityLabel(priority?: number) {
@@ -130,6 +136,10 @@ function updateCachedStage(
 
 function TimelineItem({ item }: { item: CrmTimelineItemDto }) {
   const actor = item.actor || item.user;
+  const details = item.details ?? {};
+  const notes = typeof details.notes === 'string' ? details.notes.trim() : '';
+  const closedReason =
+    typeof details.closedReason === 'string' ? details.closedReason.trim() : '';
 
   return (
     <li
@@ -150,11 +160,26 @@ function TimelineItem({ item }: { item: CrmTimelineItemDto }) {
       {actor?.email && (
         <p className="mt-1 text-xs text-gray-500">Actor: {actor.email}</p>
       )}
+      {notes && (
+        <p className="mt-2 text-sm text-gray-600">
+          <span className="font-medium text-gray-700">Notes:</span> {notes}
+        </p>
+      )}
+      {closedReason && (
+        <p className="mt-2 text-sm text-gray-600">
+          <span className="font-medium text-gray-700">Closed reason:</span> {closedReason}
+        </p>
+      )}
     </li>
   );
 }
 
-export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as CrmStage[], onClose }: LeadDetailDrawerProps) {
+export function LeadDetailDrawer({
+  leadId,
+  stages = CRM_PIPELINE_STAGES,
+  onClose,
+  onDeleted,
+}: LeadDetailDrawerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAdmin, isSalesManager } = useAuth();
@@ -163,6 +188,7 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
   const [taskTime, setTaskTime] = useState(defaultTaskTime());
   const [taskNotes, setTaskNotes] = useState('');
   const [lostOpen, setLostOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [lostReason, setLostReason] = useState('');
   const [closingTask, setClosingTask] = useState<CrmTaskSummaryDto | null>(null);
   const [closedReason, setClosedReason] = useState('');
@@ -201,6 +227,7 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
     if (!leadId) {
       setCreateTaskOpen(false);
       setLostOpen(false);
+      setDeleteOpen(false);
       setClosingTask(null);
       return;
     }
@@ -273,6 +300,22 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
       setClosedReason('');
     },
     onSettled: () => invalidateLeadQueries(queryClient, leadId),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      if (!leadId) throw new Error('Missing lead id');
+      return deleteCrmLead(leadId);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to delete lead');
+    },
+    onSuccess: () => {
+      toast.success('Lead deleted');
+      setDeleteOpen(false);
+      invalidateLeadQueries(queryClient, leadId);
+      onDeleted?.();
+    },
   });
 
   const handleStageChange = useCallback((stage: CrmStage) => {
@@ -438,8 +481,28 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
                       >
                         <Plus className="mr-2 h-4 w-4" /> Create Task
                       </Button>
+                      {isAdmin && (
+                        <Button
+                          data-testid="lead-detail-delete"
+                          size="sm"
+                          variant="danger"
+                          onClick={() => setDeleteOpen(true)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
+                </section>
+
+                <section data-testid="lead-detail-notes" className="rounded-lg border border-gray-200 px-4 py-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">Sales notes</h3>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm text-gray-600">
+                    {lead.notes || 'No notes'}
+                  </p>
                 </section>
 
                 <section className="rounded-lg border border-gray-200 px-4 py-4">
@@ -454,7 +517,7 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
                         aria-label="Change lead stage"
                         value={lead.stage}
                         disabled={stageMutation.isPending}
-                        options={stages.map((stage) => ({ value: stage, label: stageLabel(stage) }))}
+                        options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
                         onChange={(event) => handleStageChange(event.target.value as CrmStage)}
                       />
                     </div>
@@ -693,6 +756,17 @@ export function LeadDetailDrawer({ leadId, stages = Object.values(CrmStage) as C
           />
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete Lead"
+        message={`Permanently delete ${lead?.phoneNumber || 'this lead'} from CRM? This cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </>
   );
 }

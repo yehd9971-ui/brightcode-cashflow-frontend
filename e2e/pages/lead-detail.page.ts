@@ -13,6 +13,8 @@ export class LeadDetailPage {
   readonly markLostButton: Locator;
   readonly markSoldButton: Locator;
   readonly callButton: Locator;
+  readonly deleteButton: Locator;
+  readonly notes: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -27,6 +29,8 @@ export class LeadDetailPage {
     this.markLostButton = page.getByTestId('lead-detail-mark-lost');
     this.markSoldButton = page.getByTestId('lead-detail-mark-sold');
     this.callButton = page.getByTestId('lead-detail-call');
+    this.deleteButton = page.getByTestId('lead-detail-delete');
+    this.notes = page.getByTestId('lead-detail-notes');
   }
 
   async openDirect(leadId: string) {

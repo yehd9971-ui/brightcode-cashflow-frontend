@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { loginApiByRole, loginByRole, newContextForRole } from '../helpers/auth-roles';
-import { getUsers, updateCrmLeadStageApi } from '../helpers/api-client';
+import {
+  createCallApi,
+  deleteCrmLeadApi,
+  ensureClientNumberApi,
+  getUsers,
+  updateCrmLeadStageApi,
+} from '../helpers/api-client';
 import { createTestNumberFixture } from '../helpers/crm-fixtures';
 import { assertLocalPlaywrightTargets } from '../helpers/local-readiness';
-import { uniqueTestPhone } from '../helpers/test-data';
+import { TEST_RUN_PREFIX, uniqueTestPhone } from '../helpers/test-data';
 import { PipelinePage } from '../pages/pipeline.page';
 
 async function createPipelineLead(
@@ -24,6 +30,12 @@ test.describe('CRM Pipeline UI', () => {
     await adminPipeline.goto();
     await expect(adminPipeline.board).toBeVisible();
     await expect(adminPipeline.column('NEW')).toBeVisible();
+    await expect(adminPipeline.column('NOT_ANSWERED')).toBeVisible();
+    await expect(adminPipeline.column('NOT_ANSWERED').locator('h2')).toHaveText('NO ANSWER');
+    await expect(adminPage.getByTestId('pipeline-stage-CONTACTED')).toHaveCount(0);
+    await expect(adminPage.getByText('Showing the first 100 leads')).toHaveCount(0);
+    await expect(adminPage.locator('option', { hasText: 'CONTACTED' })).toHaveCount(0);
+    await expect(adminPage.locator('option', { hasText: 'NO ANSWER' }).first()).toBeAttached();
     await adminContext.close();
 
     const { context: managerContext, page: managerPage } = await newContextForRole(browser, 'SALES_MANAGER');
@@ -81,6 +93,72 @@ test.describe('CRM Pipeline UI', () => {
     await expect(pipeline.leadCard(lead.phoneNumber)).toHaveCount(0);
 
     await context.close();
+  });
+
+  test('marks non-NO ANSWER leads when the last call was not answered', async ({ browser }) => {
+    const sales = await loginApiByRole('SALES');
+    const lead = await createPipelineLead(sales.accessToken, { stage: 'HOT_LEAD', priority: 4 });
+    await createCallApi(
+      {
+        clientPhoneNumber: lead.phoneNumber,
+        callStatus: 'NOT_ANSWERED',
+        notes: `${TEST_RUN_PREFIX} last no answer`,
+      },
+      sales.accessToken,
+    );
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    const card = pipeline.leadCard(lead.phoneNumber);
+    await expect(pipeline.column('HOT_LEAD')).toContainText(lead.phoneNumber);
+    await expect(card.getByText('Last call: No answer')).toBeVisible();
+    await expect(card).toHaveClass(/border-red-300/);
+
+    await context.close();
+  });
+
+  test('sales manager can select self in the employee filter', async ({ browser }) => {
+    const manager = await loginApiByRole('SALES_MANAGER');
+    const { context, page } = await newContextForRole(browser, 'SALES_MANAGER');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    await expect(pipeline.employeeFilter.locator('option', { hasText: 'yasmin@brightc0de.com' })).toHaveCount(1);
+    await pipeline.employeeFilter.selectOption(manager.user.id);
+    await expect(pipeline.employeeFilter).toHaveValue(manager.user.id);
+
+    await context.close();
+  });
+
+  test('paginates each stage at 50 leads', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const created = await Promise.all(
+      Array.from({ length: 51 }).map((_, index) =>
+        ensureClientNumberApi(
+          {
+            phoneNumber: uniqueTestPhone(Date.now() + 3000 + index),
+            clientName: `${TEST_RUN_PREFIX} page ${index}`,
+            source: 'Playwright',
+          },
+          admin.accessToken,
+        ),
+      ),
+    );
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    await expect(pipeline.column('NEW').getByTestId('pipeline-lead-card')).toHaveCount(50);
+    await expect(pipeline.stagePage('NEW')).toContainText(/Page 1 of \d+/);
+    await expect(pipeline.nextStagePage('NEW')).toBeEnabled();
+    await pipeline.nextStagePage('NEW').click();
+    await expect(pipeline.stagePage('NEW')).toContainText(/Page 2 of \d+/, { timeout: 15_000 });
+
+    await context.close();
+    await Promise.all(created.map((lead) => deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined)));
   });
 
   test('moves a lead between stages and opens lead detail drawer', async ({ browser }) => {

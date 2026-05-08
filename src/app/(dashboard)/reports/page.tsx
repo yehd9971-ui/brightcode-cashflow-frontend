@@ -26,6 +26,7 @@ import {
   downloadBlob,
 } from '@/lib/services/reports';
 import { getUsers } from '@/lib/services/users';
+import { CRM_STAGE_OPTIONS, crmStageLabel } from '@/lib/crm-stages';
 import { CrmReportQueryDto, CrmStage, ReportQueryDto, TransactionStatus, UserResponseDto } from '@/types/api';
 import { formatAmount, formatDateShort } from '@/utils/formatters';
 import { Card, StatCard } from '@/components/ui/Card';
@@ -224,7 +225,7 @@ export default function ReportsPage() {
 
   const crmStageOptions = [
     { value: '', label: 'All Stages' },
-    ...Object.values(CrmStage).map((stage) => ({ value: stage, label: stage.replace(/_/g, ' ') })),
+    ...CRM_STAGE_OPTIONS,
   ];
 
   const priorityOptions = [
@@ -736,7 +737,7 @@ export default function ReportsPage() {
                           {crmReport.staleLeadsByStage.map((row) => (
                             <tr key={row.stage}>
                               <td className="px-4 py-3 text-sm text-gray-900">
-                                {row.stage.replace(/_/g, ' ')}
+                                {crmStageLabel(row.stage)}
                               </td>
                               <td className="px-4 py-3 text-right text-sm font-semibold text-yellow-700">
                                 {row.count}

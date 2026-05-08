@@ -153,7 +153,7 @@ export enum LeadStatus {
 
 export enum CrmStage {
   NEW = 'NEW',
-  CONTACTED = 'CONTACTED',
+  NOT_ANSWERED = 'NOT_ANSWERED',
   INTERESTED = 'INTERESTED',
   HOT_LEAD = 'HOT_LEAD',
   FOLLOWING_UP = 'FOLLOWING_UP',

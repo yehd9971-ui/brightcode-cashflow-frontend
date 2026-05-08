@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LayoutDashboard } from 'lucide-react';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -13,6 +13,7 @@ import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getSalesUsers } from '@/lib/services/users';
+import { CRM_PIPELINE_STAGES } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   CrmLeadResponseDto,
@@ -22,18 +23,18 @@ import {
   Role,
 } from '@/types/api';
 
-const PIPELINE_STAGES = Object.values(CrmStage) as CrmStage[];
-const PIPELINE_LIMIT = 100;
+const PIPELINE_STAGES = CRM_PIPELINE_STAGES;
+const PIPELINE_LIMIT = 50;
 
 function priorityValue(value: string) {
   return value ? Number(value) : undefined;
 }
 
-function createEmptyGroups() {
+function createInitialStagePages() {
   return PIPELINE_STAGES.reduce((acc, stage) => {
-    acc[stage] = [];
+    acc[stage] = 1;
     return acc;
-  }, {} as Record<CrmStage, CrmLeadResponseDto[]>);
+  }, {} as Record<CrmStage, number>);
 }
 
 function PipelineLoadingFallback() {
@@ -51,26 +52,24 @@ function CrmPipelineContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const { isAdmin, isSalesManager } = useAuth();
+  const { isAdmin, isSalesManager, user } = useAuth();
   const [ownerId, setOwnerId] = useState('');
   const [priority, setPriority] = useState('');
+  const [stagePages, setStagePages] = useState(createInitialStagePages);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
 
-  const leadsQuery: CrmLeadsQueryDto = useMemo(() => ({
-    page: 1,
-    limit: PIPELINE_LIMIT,
+  const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
     ownerId: ownerId || undefined,
     priority: priorityValue(priority),
     sortBy: 'updatedAt',
     sortOrder: 'desc',
   }), [ownerId, priority]);
 
-  const pipelineQueryKey = useMemo(
-    () => ['crm', 'leads', 'pipeline', leadsQuery] as const,
-    [leadsQuery],
-  );
+  useEffect(() => {
+    setStagePages(createInitialStagePages());
+  }, [ownerId, priority]);
 
   const {
     data: users,
@@ -81,29 +80,43 @@ function CrmPipelineContent() {
     enabled: isAdmin || isSalesManager,
   });
 
-  const {
-    data: leads,
-    isLoading: leadsLoading,
-    isError: leadsError,
-    refetch: refetchLeads,
-  } = useQuery({
-    queryKey: pipelineQueryKey,
-    queryFn: () => getCrmLeads(leadsQuery),
-    enabled: isAdmin || isSalesManager,
+  const stageQueries = useQueries({
+    queries: PIPELINE_STAGES.map((stage) => {
+      const query: CrmLeadsQueryDto = {
+        ...baseLeadsQuery,
+        stage,
+        page: stagePages[stage] ?? 1,
+        limit: PIPELINE_LIMIT,
+      };
+
+      return {
+        queryKey: ['crm', 'leads', 'pipeline', stage, query] as const,
+        queryFn: () => getCrmLeads(query),
+        enabled: isAdmin || isSalesManager,
+      };
+    }),
   });
 
-  const groupedLeads = useMemo(() => {
-    const groups = createEmptyGroups();
-    (leads?.data ?? []).forEach((lead) => {
-      const stage = PIPELINE_STAGES.includes(lead.stage) ? lead.stage : CrmStage.NEW;
-      groups[stage].push(lead);
-    });
-    return groups;
-  }, [leads?.data]);
+  const stageData = useMemo(() => {
+    return PIPELINE_STAGES.reduce((acc, stage, index) => {
+      acc[stage] = stageQueries[index].data;
+      return acc;
+    }, {} as Partial<Record<CrmStage, CrmLeadsResponseDto>>);
+  }, [stageQueries]);
 
   const countForStage = (stage: CrmStage) => {
-    const apiCount = leads?.countsByStage?.[stage];
-    return typeof apiCount === 'number' ? apiCount : groupedLeads[stage].length;
+    const total = stageData[stage]?.total;
+    return typeof total === 'number' ? total : 0;
+  };
+
+  const totalPagesForStage = (stage: CrmStage) => stageData[stage]?.totalPages ?? 1;
+  const leadsForStage = (stage: CrmStage) => stageData[stage]?.data ?? [];
+  const totalLeads = PIPELINE_STAGES.reduce((sum, stage) => sum + countForStage(stage), 0);
+  const leadsLoading = stageQueries.some((query) => query.isLoading);
+  const leadsInitialLoading = leadsLoading && stageQueries.every((query) => !query.data);
+  const leadsError = stageQueries.some((query) => query.isError);
+  const refetchLeads = () => {
+    stageQueries.forEach((query) => query.refetch());
   };
 
   const moveStageMutation = useMutation({
@@ -111,31 +124,9 @@ function CrmPipelineContent() {
       updateCrmLeadStage(lead.id, { stage }),
     onMutate: async ({ lead, stage }) => {
       setUpdatingLeadId(lead.id);
-      await queryClient.cancelQueries({ queryKey: pipelineQueryKey });
-      const previous = queryClient.getQueryData<CrmLeadsResponseDto>(pipelineQueryKey);
-
-      queryClient.setQueryData<CrmLeadsResponseDto>(pipelineQueryKey, (current) => {
-        if (!current) return current;
-        const previousStage = lead.stage;
-        const countsByStage = { ...current.countsByStage };
-        countsByStage[previousStage] = Math.max((countsByStage[previousStage] ?? 1) - 1, 0);
-        countsByStage[stage] = (countsByStage[stage] ?? 0) + 1;
-
-        return {
-          ...current,
-          countsByStage,
-          data: current.data.map((item) =>
-            item.id === lead.id ? { ...item, stage, crmStage: stage } : item
-          ),
-        };
-      });
-
-      return { previous };
+      await queryClient.cancelQueries({ queryKey: ['crm', 'leads', 'pipeline'] });
     },
-    onError: (error: any, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(pipelineQueryKey, context.previous);
-      }
+    onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Failed to update stage');
     },
     onSuccess: () => {
@@ -154,6 +145,10 @@ function CrmPipelineContent() {
     moveStageMutation.mutate({ lead, stage });
   };
 
+  const handlePageChange = (stage: CrmStage, page: number) => {
+    setStagePages((current) => ({ ...current, [stage]: page }));
+  };
+
   const openLeadDetail = useCallback((lead: CrmLeadResponseDto) => {
     const params = new URLSearchParams(searchString);
     params.set('leadId', lead.id);
@@ -166,8 +161,6 @@ function CrmPipelineContent() {
     const nextSearch = params.toString();
     router.push(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
   }, [pathname, router, searchString]);
-
-  const showLimitWarning = Boolean(leads && leads.total > PIPELINE_LIMIT);
 
   return (
     <div data-testid="pipeline-page" className="space-y-6">
@@ -182,25 +175,20 @@ function CrmPipelineContent() {
             </p>
           </div>
           <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
-            Total leads: <span className="font-semibold text-gray-900">{leads?.total ?? 0}</span>
+            Total leads: <span className="font-semibold text-gray-900">{totalLeads}</span>
           </div>
         </div>
 
         <PipelineFilters
           users={users ?? []}
+          currentUser={user}
           ownerId={ownerId}
           priority={priority}
           onOwnerChange={setOwnerId}
           onPriorityChange={setPriority}
         />
 
-        {showLimitWarning && (
-          <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-            Showing the first {PIPELINE_LIMIT} leads. Narrow filters to inspect the rest.
-          </div>
-        )}
-
-        {(leadsLoading || usersLoading) && (
+        {(leadsInitialLoading || usersLoading) && (
           <div data-testid="pipeline-loading" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
               <CardSkeleton key={index} />
@@ -214,7 +202,7 @@ function CrmPipelineContent() {
           </div>
         )}
 
-        {!leadsLoading && !leadsError && (
+        {!leadsInitialLoading && !leadsError && (
           <div
             data-testid="crm-pipeline-board"
             className="overflow-x-auto pb-3"
@@ -225,11 +213,14 @@ function CrmPipelineContent() {
                   key={stage}
                   stage={stage}
                   count={countForStage(stage)}
-                  leads={groupedLeads[stage]}
+                  leads={leadsForStage(stage)}
                   stages={PIPELINE_STAGES}
+                  page={stagePages[stage] ?? 1}
+                  totalPages={totalPagesForStage(stage)}
                   updatingLeadId={updatingLeadId}
                   onPreview={openLeadDetail}
                   onMoveStage={handleMoveStage}
+                  onPageChange={handlePageChange}
                 />
               ))}
             </div>
@@ -240,6 +231,7 @@ function CrmPipelineContent() {
           leadId={selectedLeadId}
           stages={PIPELINE_STAGES}
           onClose={closeLeadDetail}
+          onDeleted={closeLeadDetail}
         />
     </div>
   );
