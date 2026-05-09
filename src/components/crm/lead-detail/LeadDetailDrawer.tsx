@@ -15,7 +15,6 @@ import {
   Tag,
   Trash2,
   X,
-  XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -187,9 +186,7 @@ export function LeadDetailDrawer({
   const [taskDate, setTaskDate] = useState(egyptDate(1));
   const [taskTime, setTaskTime] = useState(defaultTaskTime());
   const [taskNotes, setTaskNotes] = useState('');
-  const [lostOpen, setLostOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [lostReason, setLostReason] = useState('');
   const [closingTask, setClosingTask] = useState<CrmTaskSummaryDto | null>(null);
   const [closedReason, setClosedReason] = useState('');
 
@@ -226,7 +223,6 @@ export function LeadDetailDrawer({
   useEffect(() => {
     if (!leadId) {
       setCreateTaskOpen(false);
-      setLostOpen(false);
       setDeleteOpen(false);
       setClosingTask(null);
       return;
@@ -235,7 +231,6 @@ export function LeadDetailDrawer({
     setTaskDate(egyptDate(1));
     setTaskTime(defaultTaskTime());
     setTaskNotes('');
-    setLostReason('');
     setClosedReason('');
   }, [leadId]);
 
@@ -263,9 +258,7 @@ export function LeadDetailDrawer({
       invalidateLeadQueries(queryClient, leadId);
     },
     onSuccess: (_data, variables) => {
-      toast.success(variables.stage === CrmStage.SOLD ? 'Marked sold' : variables.stage === CrmStage.LOST ? 'Marked lost' : 'Stage updated');
-      setLostOpen(false);
-      setLostReason('');
+      toast.success(variables.stage === CrmStage.SOLD ? 'Marked sold' : 'Stage updated');
     },
     onSettled: () => invalidateLeadQueries(queryClient, leadId),
   });
@@ -330,16 +323,6 @@ export function LeadDetailDrawer({
       taskTime,
       notes: taskNotes.trim() || undefined,
     });
-  };
-
-  const handleMarkLost = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const reason = lostReason.trim();
-    if (!reason) {
-      toast.error('Lost reason is required');
-      return;
-    }
-    stageMutation.mutate({ stage: CrmStage.LOST, payload: { lostReason: reason } });
   };
 
   const handleCloseTask = (event: FormEvent<HTMLFormElement>) => {
@@ -532,16 +515,6 @@ export function LeadDetailDrawer({
                       >
                         <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Sold
                       </Button>
-                      <Button
-                        data-testid="lead-detail-mark-lost"
-                        type="button"
-                        size="sm"
-                        variant="danger"
-                        disabled={stageMutation.isPending || lead.stage === CrmStage.LOST}
-                        onClick={() => setLostOpen(true)}
-                      >
-                        <XCircle className="mr-2 h-4 w-4" /> Mark Lost
-                      </Button>
                     </div>
                   </div>
                 </section>
@@ -695,35 +668,6 @@ export function LeadDetailDrawer({
             maxLength={2000}
             showCounter
             onChange={(event) => setTaskNotes(event.target.value)}
-          />
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={lostOpen}
-        onClose={() => setLostOpen(false)}
-        title="Mark Lost"
-        size="lg"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setLostOpen(false)} disabled={stageMutation.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" form="lead-detail-lost-form" variant="danger" loading={stageMutation.isPending}>
-              Mark Lost
-            </Button>
-          </>
-        }
-      >
-        <form id="lead-detail-lost-form" onSubmit={handleMarkLost}>
-          <Textarea
-            label="Lost reason"
-            name="lostReason"
-            required
-            value={lostReason}
-            maxLength={2000}
-            showCounter
-            onChange={(event) => setLostReason(event.target.value)}
           />
         </form>
       </Modal>

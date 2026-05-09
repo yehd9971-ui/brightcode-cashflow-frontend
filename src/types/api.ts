@@ -157,9 +157,7 @@ export enum CrmStage {
   INTERESTED = 'INTERESTED',
   HOT_LEAD = 'HOT_LEAD',
   FOLLOWING_UP = 'FOLLOWING_UP',
-  PROPOSAL_SENT = 'PROPOSAL_SENT',
   SOLD = 'SOLD',
-  LOST = 'LOST',
   NOT_INTERESTED = 'NOT_INTERESTED',
 }
 
@@ -850,6 +848,7 @@ export interface CrmLeadsQueryDto {
   stage?: CrmStage;
   ownerId?: string;
   priority?: number;
+  search?: string;
   stale?: boolean;
   staleDays?: number;
   nextAction?: 'overdue' | 'today' | 'upcoming' | 'none' | 'all';

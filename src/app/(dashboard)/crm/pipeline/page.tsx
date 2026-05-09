@@ -55,21 +55,25 @@ function CrmPipelineContent() {
   const { isAdmin, isSalesManager, user } = useAuth();
   const [ownerId, setOwnerId] = useState('');
   const [priority, setPriority] = useState('');
+  const [phoneSearch, setPhoneSearch] = useState('');
   const [stagePages, setStagePages] = useState(createInitialStagePages);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
+  const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
+  const effectivePhoneSearch = phoneSearchDigits.length >= 5 ? phoneSearch.trim() : undefined;
 
   const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
     ownerId: ownerId || undefined,
     priority: priorityValue(priority),
+    search: effectivePhoneSearch,
     sortBy: 'updatedAt',
     sortOrder: 'desc',
-  }), [ownerId, priority]);
+  }), [effectivePhoneSearch, ownerId, priority]);
 
   useEffect(() => {
     setStagePages(createInitialStagePages());
-  }, [ownerId, priority]);
+  }, [effectivePhoneSearch, ownerId, priority]);
 
   const {
     data: users,
@@ -184,8 +188,10 @@ function CrmPipelineContent() {
           currentUser={user}
           ownerId={ownerId}
           priority={priority}
+          phoneSearch={phoneSearch}
           onOwnerChange={setOwnerId}
           onPriorityChange={setPriority}
+          onPhoneSearchChange={setPhoneSearch}
         />
 
         {(leadsInitialLoading || usersLoading) && (

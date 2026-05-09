@@ -93,14 +93,14 @@ test.describe('CRM regression coverage', () => {
     await expect(pipeline.column('NEW')).toContainText(stale.phoneNumber);
     await expect(pipeline.leadCard(stale.phoneNumber).getByText('Stale')).toBeVisible();
 
-    await pipeline.moveStage(hot.phoneNumber).selectOption('PROPOSAL_SENT');
+    await pipeline.moveStage(hot.phoneNumber).selectOption('FOLLOWING_UP');
     await expect(page.getByText('Stage updated')).toBeVisible({ timeout: 10_000 });
-    await expect(pipeline.column('PROPOSAL_SENT')).toContainText(hot.phoneNumber);
+    await expect(pipeline.column('FOLLOWING_UP')).toContainText(hot.phoneNumber);
 
     const detail = new LeadDetailPage(page);
     await detail.openFromPhone(hot.phoneNumber);
     await expect(detail.drawer).toContainText(hot.phoneNumber);
-    await expect(detail.stageSelect).toHaveValue('PROPOSAL_SENT');
+    await expect(detail.stageSelect).toHaveValue('FOLLOWING_UP');
     await context.close();
 
     const salesContext = await browser.newContext();

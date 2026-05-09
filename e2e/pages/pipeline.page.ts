@@ -6,6 +6,7 @@ export class PipelinePage {
   readonly board: Locator;
   readonly employeeFilter: Locator;
   readonly priorityFilter: Locator;
+  readonly phoneSearch: Locator;
   readonly cards: Locator;
 
   constructor(page: Page) {
@@ -14,6 +15,7 @@ export class PipelinePage {
     this.board = page.getByTestId('crm-pipeline-board');
     this.employeeFilter = page.getByTestId('pipeline-employee-filter');
     this.priorityFilter = page.getByTestId('pipeline-priority-filter');
+    this.phoneSearch = page.getByTestId('pipeline-phone-search');
     this.cards = page.getByTestId('pipeline-lead-card');
   }
 

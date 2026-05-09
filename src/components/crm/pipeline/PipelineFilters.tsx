@@ -1,6 +1,7 @@
 'use client';
 
 import { Filter } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Role, UserResponseDto } from '@/types/api';
 
@@ -9,8 +10,10 @@ interface PipelineFiltersProps {
   currentUser?: UserResponseDto | null;
   ownerId: string;
   priority: string;
+  phoneSearch: string;
   onOwnerChange: (value: string) => void;
   onPriorityChange: (value: string) => void;
+  onPhoneSearchChange: (value: string) => void;
 }
 
 const priorityOptions = [
@@ -26,9 +29,16 @@ export function PipelineFilters({
   currentUser,
   ownerId,
   priority,
+  phoneSearch,
   onOwnerChange,
   onPriorityChange,
+  onPhoneSearchChange,
 }: PipelineFiltersProps) {
+  const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
+  const phoneSearchError =
+    phoneSearchDigits.length > 0 && phoneSearchDigits.length < 5
+      ? 'Enter at least 5 digits'
+      : undefined;
   const employeeMap = new Map<string, UserResponseDto>();
   if (currentUser?.role === Role.SALES || currentUser?.role === Role.SALES_MANAGER) {
     employeeMap.set(currentUser.id, currentUser);
@@ -48,7 +58,7 @@ export function PipelineFilters({
         <Filter className="h-4 w-4" />
         Filters
       </div>
-      <div className="grid flex-1 gap-3 sm:grid-cols-2">
+      <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_1fr_1.2fr]">
         <Select
           id="pipeline-employee-filter"
           data-testid="pipeline-employee-filter"
@@ -64,6 +74,16 @@ export function PipelineFilters({
           options={priorityOptions}
           value={priority}
           onChange={(event) => onPriorityChange(event.target.value)}
+        />
+        <Input
+          id="pipeline-phone-search"
+          data-testid="pipeline-phone-search"
+          aria-label="Phone search"
+          inputMode="numeric"
+          placeholder="Search phone, min 5 digits"
+          value={phoneSearch}
+          error={phoneSearchError}
+          onChange={(event) => onPhoneSearchChange(event.target.value)}
         />
       </div>
     </div>

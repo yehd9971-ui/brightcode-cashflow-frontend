@@ -6,9 +6,7 @@ export const CRM_PIPELINE_STAGES: CrmStage[] = [
   CrmStage.INTERESTED,
   CrmStage.HOT_LEAD,
   CrmStage.FOLLOWING_UP,
-  CrmStage.PROPOSAL_SENT,
   CrmStage.SOLD,
-  CrmStage.LOST,
   CrmStage.NOT_INTERESTED,
 ];
 

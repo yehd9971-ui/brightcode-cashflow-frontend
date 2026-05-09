@@ -33,8 +33,12 @@ test.describe('CRM Pipeline UI', () => {
     await expect(adminPipeline.column('NOT_ANSWERED')).toBeVisible();
     await expect(adminPipeline.column('NOT_ANSWERED').locator('h2')).toHaveText('NO ANSWER');
     await expect(adminPage.getByTestId('pipeline-stage-CONTACTED')).toHaveCount(0);
+    await expect(adminPage.getByTestId('pipeline-stage-PROPOSAL_SENT')).toHaveCount(0);
+    await expect(adminPage.getByTestId('pipeline-stage-LOST')).toHaveCount(0);
     await expect(adminPage.getByText('Showing the first 100 leads')).toHaveCount(0);
     await expect(adminPage.locator('option', { hasText: 'CONTACTED' })).toHaveCount(0);
+    await expect(adminPage.locator('option', { hasText: 'PROPOSAL SENT' })).toHaveCount(0);
+    await expect(adminPage.locator('option', { hasText: 'LOST' })).toHaveCount(0);
     await expect(adminPage.locator('option', { hasText: 'NO ANSWER' }).first()).toBeAttached();
     await adminContext.close();
 
@@ -159,6 +163,47 @@ test.describe('CRM Pipeline UI', () => {
 
     await context.close();
     await Promise.all(created.map((lead) => deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined)));
+  });
+
+  test('searches phone numbers outside the current stage page', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const target = await ensureClientNumberApi(
+      {
+        phoneNumber: uniqueTestPhone(Date.now() + 5000),
+        clientName: `${TEST_RUN_PREFIX} search target`,
+        source: 'Playwright',
+      },
+      admin.accessToken,
+    );
+    const fillers = [];
+    for (let index = 0; index < 50; index += 1) {
+      fillers.push(
+        await ensureClientNumberApi(
+          {
+            phoneNumber: uniqueTestPhone(Date.now() + 5100 + index),
+            clientName: `${TEST_RUN_PREFIX} search filler ${index}`,
+            source: 'Playwright',
+          },
+          admin.accessToken,
+        ),
+      );
+    }
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    await expect(pipeline.leadCard(target.phoneNumber)).toHaveCount(0);
+    await pipeline.phoneSearch.fill(target.phoneNumber);
+    await expect(pipeline.column('NEW')).toContainText(target.phoneNumber, { timeout: 15_000 });
+    await expect(pipeline.stagePage('NEW')).toContainText('Page 1 of 1');
+
+    await context.close();
+    await Promise.all(
+      [target, ...fillers].map((lead) =>
+        deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined),
+      ),
+    );
   });
 
   test('moves a lead between stages and opens lead detail drawer', async ({ browser }) => {

@@ -133,13 +133,12 @@ test.describe('Lead detail drawer UI', () => {
     await expect(page.getByText('Marked sold')).toBeVisible({ timeout: 10_000 });
     await expect(detail.stageSelect).toHaveValue('SOLD');
 
-    await detail.markLostButton.click();
-    const lostDialog = page.locator('[role="dialog"]').filter({ hasText: 'Lost reason' });
-    await lostDialog.getByLabel('Lost reason').fill(`${TEST_RUN_PREFIX} lost reason`);
-    await lostDialog.getByRole('button', { name: 'Mark Lost' }).click();
-    await expect(page.getByText('Marked lost')).toBeVisible({ timeout: 10_000 });
-    await expect(detail.stageSelect).toHaveValue('LOST');
-    await expect(detail.timelineEvent(/LOST|STAGE/i)).toBeVisible({ timeout: 15_000 });
+    await expect(detail.markLostButton).toHaveCount(0);
+
+    await detail.stageSelect.selectOption('NOT_INTERESTED');
+    await expect(page.getByText('Stage updated')).toBeVisible({ timeout: 10_000 });
+    await expect(detail.stageSelect).toHaveValue('NOT_INTERESTED');
+    await expect(detail.timelineEvent(/STAGE/i)).toBeVisible({ timeout: 15_000 });
 
     await context.close();
   });
@@ -165,7 +164,7 @@ test.describe('Lead detail drawer UI', () => {
 
   test('lead detail remains usable on mobile viewport', async ({ browser }) => {
     const admin = await loginApiByRole('ADMIN');
-    const lead = await createLead(admin.accessToken, 'PROPOSAL_SENT');
+    const lead = await createLead(admin.accessToken, 'FOLLOWING_UP');
     await createCrmLeadTaskApi(
       lead.id,
       {
