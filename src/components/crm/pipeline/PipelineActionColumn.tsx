@@ -117,31 +117,29 @@ export function PipelineTaskCard({
   isOnCall,
   onCall,
   onOpenLead,
-  onOpenPhone,
-  resolvingPhone,
+  onOpenTaskDetails,
+  resolvingTaskId,
 }: {
   task: OpenTaskResponseDto;
   activeCallPhone?: string | null;
   isOnCall?: boolean;
   onCall: (phone: string) => void;
   onOpenLead: (leadId: string) => void;
-  onOpenPhone: (phone: string) => void;
-  resolvingPhone?: string | null;
+  onOpenTaskDetails: (task: OpenTaskResponseDto) => void;
+  resolvingTaskId?: string | null;
 }) {
   const client = task.clientNumber;
   const phone = task.rawPhoneNumber || client?.phoneNumber || task.clientPhoneNumber;
   const leadId = client?.id || task.clientNumberId;
   const activeDigits = phoneDigits(activeCallPhone);
-  const resolvingForThisPhone = Boolean(
-    resolvingPhone && phoneDigits(resolvingPhone) === phoneDigits(phone),
-  );
+  const resolvingForThisTask = resolvingTaskId === task.id;
   const openDetails = () => {
     if (leadId) {
       onOpenLead(leadId);
       return;
     }
 
-    onOpenPhone(phone);
+    onOpenTaskDetails(task);
   };
   const activeForThisPhone = Boolean(
     activeDigits &&
@@ -166,8 +164,8 @@ export function PipelineTaskCard({
           <button
             type="button"
             onClick={openDetails}
-            disabled={resolvingForThisPhone}
-            title={leadId ? undefined : 'Find CRM details by phone'}
+            disabled={resolvingForThisTask}
+            title={leadId ? undefined : 'Create CRM details from task'}
             className="flex min-w-0 cursor-pointer items-center gap-2 text-left font-mono text-sm font-semibold text-blue-700 hover:underline disabled:cursor-wait disabled:opacity-70"
           >
             <Clock className="h-4 w-4 shrink-0" />
@@ -201,7 +199,7 @@ export function PipelineTaskCard({
           size="sm"
           variant="outline"
           onClick={openDetails}
-          loading={resolvingForThisPhone}
+          loading={resolvingForThisTask}
           aria-label={`Open details ${phone}`}
         >
           <Eye className="mr-1 h-4 w-4" /> Details

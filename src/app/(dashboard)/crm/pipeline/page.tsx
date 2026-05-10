@@ -20,9 +20,9 @@ import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Modal } from '@/components/ui/Modal';
-import { getOpenTasks } from '@/lib/services/call-tasks';
+import { ensureClientNumberForTask, getOpenTasks } from '@/lib/services/call-tasks';
 import { getNeedsRetry } from '@/lib/services/calls';
-import { addNumber, searchNumbers } from '@/lib/services/client-numbers';
+import { addNumber } from '@/lib/services/client-numbers';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
@@ -31,7 +31,6 @@ import { normalizePhoneNumber } from '@/utils/phone';
 import {
   AddNumberDto,
   CallResponseDto,
-  ClientNumberDto,
   CrmLeadResponseDto,
   CrmLeadsQueryDto,
   CrmLeadsResponseDto,
@@ -64,26 +63,6 @@ function retryMatchesSearch(call: CallResponseDto, searchDigits: string) {
   return (
     phoneSearchKey(call.clientPhoneNumber).includes(searchDigits) ||
     phoneSearchKey(call.rawPhoneNumber).includes(searchDigits)
-  );
-}
-
-function findNumberByPhone(numbers: ClientNumberDto[], phone: string) {
-  const searchKey = phoneSearchKey(phone);
-  if (!searchKey) return undefined;
-
-  return (
-    numbers.find((number) =>
-      [number.normalizedPhone, number.phoneNumber].some((value) => phoneSearchKey(value) === searchKey),
-    ) ??
-    numbers.find((number) =>
-      searchKey.length >= 7 &&
-      [number.normalizedPhone, number.phoneNumber].some((value) => {
-        const candidateKey = phoneSearchKey(value);
-        if (!candidateKey) return false;
-        return candidateKey.endsWith(searchKey) || searchKey.endsWith(candidateKey);
-      }),
-    ) ??
-    numbers[0]
   );
 }
 
@@ -138,7 +117,7 @@ function CrmPipelineContent() {
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
-  const [resolvingTaskPhone, setResolvingTaskPhone] = useState<string | null>(null);
+  const [resolvingTaskId, setResolvingTaskId] = useState<string | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<string>(CrmStage.NEW);
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
@@ -324,27 +303,26 @@ function CrmPipelineContent() {
     openLeadDetailById(lead.id);
   }, [openLeadDetailById]);
 
-  const openLeadDetailByPhone = useCallback(async (phoneNumber: string) => {
-    const phone = phoneNumber.trim();
-    if (!phone || resolvingTaskPhone) return;
+  const openLeadDetailByTask = useCallback(async (task: OpenTaskResponseDto) => {
+    if (resolvingTaskId) return;
 
-    setResolvingTaskPhone(phone);
+    setResolvingTaskId(task.id);
     try {
-      const matches = await searchNumbers(phone);
-      const number = findNumberByPhone(matches, phone);
+      const number = await ensureClientNumberForTask(task.id);
 
-      if (!number) {
-        toast.error('No CRM details found for this number');
-        return;
-      }
-
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['call-tasks', 'open'] }),
+        queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] }),
+        queryClient.invalidateQueries({ queryKey: ['crm', 'leads', 'pipeline'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-numbers'] }),
+      ]);
       openLeadDetailById(number.id);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Failed to find number details'));
+      toast.error(apiErrorMessage(error, 'Failed to open number details'));
     } finally {
-      setResolvingTaskPhone(null);
+      setResolvingTaskId(null);
     }
-  }, [openLeadDetailById, resolvingTaskPhone]);
+  }, [openLeadDetailById, queryClient, resolvingTaskId]);
 
   const handleTaskCall = useCallback(async (phoneNumber: string) => {
     const phone = phoneNumber.trim();
@@ -487,8 +465,8 @@ function CrmPipelineContent() {
                             isOnCall={callStatus?.currentStatus === 'ON_CALL'}
                             onCall={handleTaskCall}
                             onOpenLead={openLeadDetailById}
-                            onOpenPhone={openLeadDetailByPhone}
-                            resolvingPhone={resolvingTaskPhone}
+                            onOpenTaskDetails={openLeadDetailByTask}
+                            resolvingTaskId={resolvingTaskId}
                           />
                         ))}
                       </PipelineActionColumn>
@@ -582,8 +560,8 @@ function CrmPipelineContent() {
                       isOnCall={callStatus?.currentStatus === 'ON_CALL'}
                       onCall={handleTaskCall}
                       onOpenLead={openLeadDetailById}
-                      onOpenPhone={openLeadDetailByPhone}
-                      resolvingPhone={resolvingTaskPhone}
+                      onOpenTaskDetails={openLeadDetailByTask}
+                      resolvingTaskId={resolvingTaskId}
                     />
                   ))}
                 </PipelineActionColumn>

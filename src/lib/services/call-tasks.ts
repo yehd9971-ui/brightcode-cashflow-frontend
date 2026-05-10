@@ -1,6 +1,7 @@
 import api from '@/lib/api';
 import {
   CreateCallTaskDto,
+  ClientNumberDto,
   CallTaskQueryDto,
   CallTaskResponseDto,
   CallTaskList,
@@ -30,6 +31,11 @@ export async function getTodayCallTasks(userId?: string): Promise<CallTaskRespon
 
 export async function getOpenTasks(query?: OpenTasksQueryDto): Promise<OpenTasksResponseDto> {
   const response = await api.get<OpenTasksResponseDto>('/call-tasks/open', { params: query });
+  return response.data;
+}
+
+export async function ensureClientNumberForTask(taskId: string): Promise<ClientNumberDto> {
+  const response = await api.post<ClientNumberDto>(`/call-tasks/${taskId}/ensure-client-number`);
   return response.data;
 }
 

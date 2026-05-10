@@ -242,6 +242,53 @@ test.describe('CRM Pipeline UI', () => {
     }
   });
 
+  test('required orphan task creates CRM details before opening drawer', async ({ browser }) => {
+    test.setTimeout(120_000);
+
+    const admin = await loginApiByRole('ADMIN');
+    const orphanPhone = uniqueTestPhone(Date.now() + 12_000);
+    let context: Awaited<ReturnType<typeof newContextForRole>>['context'] | undefined;
+
+    try {
+      await createCallTaskApi(
+        {
+          clientPhoneNumber: orphanPhone,
+          taskDate: localDate(0),
+          taskTime: futureTodayTime(),
+          notes: `${TEST_RUN_PREFIX} orphan task details`,
+        },
+        admin.accessToken,
+      );
+
+      const roleContext = await newContextForRole(browser, 'ADMIN');
+      context = roleContext.context;
+      const page = roleContext.page;
+      const pipeline = new PipelinePage(page);
+      await pipeline.goto();
+      await pipeline.phoneSearch.fill(orphanPhone);
+
+      const taskCard = pipeline
+        .actionColumn('pipeline-actions-tasks-required')
+        .locator(`[data-testid="pipeline-task-card"][data-phone="${orphanPhone}"]`);
+      await expect(taskCard).toBeVisible({ timeout: 15_000 });
+
+      await taskCard.getByRole('button', { name: orphanPhone, exact: true }).click();
+      await expect(pipeline.preview()).toBeVisible({ timeout: 15_000 });
+      await expect(pipeline.preview()).toContainText(orphanPhone);
+      await expect(page.getByText('No CRM details found for this number')).toHaveCount(0);
+      await page.getByTestId('lead-detail-close').click();
+      await expect(pipeline.preview()).toHaveCount(0);
+
+      await taskCard.getByRole('button', { name: `Open details ${orphanPhone}` }).click();
+      await expect(pipeline.preview()).toContainText(orphanPhone, { timeout: 15_000 });
+      await page.getByTestId('lead-detail-close').click();
+    } finally {
+      await context?.close();
+      const matches = await searchNumbersApi(orphanPhone, admin.accessToken).catch(() => []);
+      await Promise.all(matches.map((lead) => deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined)));
+    }
+  });
+
   test('marks non-NO ANSWER leads when the last call was not answered', async ({ browser }) => {
     const sales = await loginApiByRole('SALES');
     const lead = await createPipelineLead(sales.accessToken, { stage: 'HOT_LEAD', priority: 4 });
