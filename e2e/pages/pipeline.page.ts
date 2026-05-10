@@ -4,6 +4,7 @@ export class PipelinePage {
   readonly page: Page;
   readonly heading: Locator;
   readonly board: Locator;
+  readonly mobile: Locator;
   readonly employeeFilter: Locator;
   readonly priorityFilter: Locator;
   readonly phoneSearch: Locator;
@@ -13,6 +14,7 @@ export class PipelinePage {
     this.page = page;
     this.heading = page.locator('h1', { hasText: /CRM Pipeline/i });
     this.board = page.getByTestId('crm-pipeline-board');
+    this.mobile = page.getByTestId('crm-pipeline-mobile');
     this.employeeFilter = page.getByTestId('pipeline-employee-filter');
     this.priorityFilter = page.getByTestId('pipeline-priority-filter');
     this.phoneSearch = page.getByTestId('pipeline-phone-search');
@@ -30,6 +32,10 @@ export class PipelinePage {
 
   actionColumn(testId: string) {
     return this.page.getByTestId(testId);
+  }
+
+  mobileTab(tabId: string) {
+    return this.page.getByTestId(`pipeline-mobile-tab-${tabId}`);
   }
 
   leadCard(phone: string) {

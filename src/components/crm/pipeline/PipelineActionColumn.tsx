@@ -18,6 +18,7 @@ interface PipelineActionColumnProps {
   isLoading?: boolean;
   isError?: boolean;
   emptyTitle: string;
+  layout?: 'desktop' | 'mobile';
   onRetry?: () => void;
   children: ReactNode;
 }
@@ -62,6 +63,7 @@ export function PipelineActionColumn({
   isLoading,
   isError,
   emptyTitle,
+  layout = 'desktop',
   onRetry,
   children,
 }: PipelineActionColumnProps) {
@@ -69,7 +71,10 @@ export function PipelineActionColumn({
     <section
       data-testid={testId}
       className={cn(
-        'flex min-h-[520px] max-h-[calc(100vh-260px)] w-[290px] shrink-0 flex-col overflow-hidden rounded-lg border',
+        'flex flex-col overflow-hidden rounded-lg border',
+        layout === 'mobile'
+          ? 'min-h-0 w-full'
+          : 'min-h-[520px] max-h-[calc(100vh-260px)] w-[290px] shrink-0',
         columnToneClass[tone],
       )}
     >
@@ -79,7 +84,12 @@ export function PipelineActionColumn({
           {count}
         </span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+      <div
+        className={cn(
+          'flex flex-col gap-3 p-3',
+          layout === 'mobile' ? 'overflow-visible' : 'min-h-0 flex-1 overflow-y-auto',
+        )}
+      >
         {isLoading ? (
           <CardSkeleton />
         ) : isError ? (

@@ -123,6 +123,7 @@ export function PipelineLeadCard({
           aria-label={`Move stage ${lead.phoneNumber}`}
           value={displayStage}
           disabled={isUpdating}
+          className="min-h-11 text-base sm:min-h-0 sm:text-sm"
           options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
           onChange={(event) => onMoveStage(lead, event.target.value as CrmStage)}
         />

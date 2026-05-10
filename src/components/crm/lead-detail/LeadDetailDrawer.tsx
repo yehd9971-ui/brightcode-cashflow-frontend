@@ -400,10 +400,10 @@ export function LeadDetailDrawer({
           aria-label="Lead detail"
           className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl"
         >
-          <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:gap-4 sm:px-5">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Lead Detail</p>
-              <h2 className="mt-1 truncate font-mono text-xl font-bold text-gray-900">
+              <h2 className="mt-1 break-all font-mono text-lg font-bold text-gray-900 sm:text-xl">
                 {lead?.phoneNumber || 'Loading...'}
               </h2>
               <p className="mt-1 truncate text-sm text-gray-500">
@@ -421,7 +421,7 @@ export function LeadDetailDrawer({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             {loading && (
               <div data-testid="lead-detail-loading" className="flex min-h-[360px] items-center justify-center">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
@@ -443,7 +443,7 @@ export function LeadDetailDrawer({
 
             {!loading && !hasError && lead && (
               <div className="space-y-5">
-                <section className="rounded-lg border border-gray-200 px-4 py-4">
+                <section className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="grid flex-1 gap-3 text-sm sm:grid-cols-2">
                       <div>
@@ -463,10 +463,11 @@ export function LeadDetailDrawer({
                         <p className="font-medium text-gray-900">{formatDate(lead.lastContactedAt)}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-3 lg:flex lg:flex-wrap">
                       <Button
                         data-testid="lead-detail-call"
                         size="sm"
+                        className="w-full sm:w-auto"
                         onClick={handleCall}
                         disabled={callDisabled}
                         title={callDisabled ? `Active call: ${activeCallPhone}` : undefined}
@@ -478,6 +479,7 @@ export function LeadDetailDrawer({
                         data-testid="lead-detail-create-task"
                         size="sm"
                         variant="outline"
+                        className="w-full sm:w-auto"
                         onClick={openCreateTaskModal}
                       >
                         <Plus className="mr-2 h-4 w-4" /> Create Task
@@ -487,6 +489,7 @@ export function LeadDetailDrawer({
                           data-testid="lead-detail-delete"
                           size="sm"
                           variant="danger"
+                          className="w-full sm:w-auto"
                           onClick={() => setDeleteOpen(true)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -496,7 +499,7 @@ export function LeadDetailDrawer({
                   </div>
                 </section>
 
-                <section data-testid="lead-detail-notes" className="rounded-lg border border-gray-200 px-4 py-4">
+                <section data-testid="lead-detail-notes" className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="mb-2 flex items-center gap-2">
                     <FileText className="h-4 w-4 text-blue-600" />
                     <h3 className="text-sm font-semibold text-gray-900">Sales notes</h3>
@@ -506,7 +509,7 @@ export function LeadDetailDrawer({
                   </p>
                 </section>
 
-                <section className="rounded-lg border border-gray-200 px-4 py-4">
+                <section className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div data-testid="lead-detail-stage" className="min-w-0 flex-1">
                       <div className="mb-2 flex items-center gap-2">
@@ -518,16 +521,18 @@ export function LeadDetailDrawer({
                         aria-label="Change lead stage"
                         value={visibleStage(lead.stage)}
                         disabled={stageMutation.isPending}
+                        className="min-h-11 text-base sm:min-h-0 sm:text-sm"
                         options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
                         onChange={(event) => handleStageChange(event.target.value as CrmStage)}
                       />
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 sm:w-auto">
                       <Button
                         data-testid="lead-detail-mark-sold"
                         type="button"
                         size="sm"
                         variant="outline"
+                        className="w-full sm:w-auto"
                         disabled={stageMutation.isPending || lead.stage === CrmStage.SOLD}
                         onClick={() => stageMutation.mutate({ stage: CrmStage.SOLD })}
                       >
@@ -537,7 +542,7 @@ export function LeadDetailDrawer({
                   </div>
                 </section>
 
-                <section data-testid="lead-detail-next-task" className="rounded-lg border border-gray-200 px-4 py-4">
+                <section data-testid="lead-detail-next-task" className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <CalendarClock className="h-4 w-4 text-blue-600" />
@@ -560,7 +565,7 @@ export function LeadDetailDrawer({
                   )}
                 </section>
 
-                <section data-testid="lead-detail-recent-call" className="rounded-lg border border-gray-200 px-4 py-4">
+                <section data-testid="lead-detail-recent-call" className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Phone className="h-4 w-4 text-blue-600" />
                     <h3 className="text-sm font-semibold text-gray-900">Recent call</h3>
@@ -580,7 +585,7 @@ export function LeadDetailDrawer({
                   )}
                 </section>
 
-                <section className="rounded-lg border border-gray-200 px-4 py-4">
+                <section className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <h3 className="mb-3 text-sm font-semibold text-gray-900">Tasks and follow-ups</h3>
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div>
@@ -620,7 +625,7 @@ export function LeadDetailDrawer({
                   </div>
                 </section>
 
-                <section data-testid="lead-detail-timeline" className="rounded-lg border border-gray-200 px-4 py-4">
+                <section data-testid="lead-detail-timeline" className="rounded-lg border border-gray-200 px-3 py-4 sm:px-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-gray-900">Timeline</h3>
                     <Button size="sm" variant="ghost" onClick={() => timelineQuery.refetch()}>

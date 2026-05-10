@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, Suspense, useCallback, useMemo, useState } from 'react';
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
@@ -25,7 +25,7 @@ import { getNeedsRetry } from '@/lib/services/calls';
 import { addNumber } from '@/lib/services/client-numbers';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getSalesUsers } from '@/lib/services/users';
-import { CRM_PIPELINE_STAGES } from '@/lib/crm-stages';
+import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneNumber } from '@/utils/phone';
 import {
@@ -43,6 +43,8 @@ import {
 
 const PIPELINE_STAGES = CRM_PIPELINE_STAGES;
 const PIPELINE_LIMIT = 50;
+const MOBILE_TASKS_TAB = 'TASKS_REQUIRED';
+const MOBILE_RETRY_TAB = 'NEEDS_RETRY';
 
 function priorityValue(value: string) {
   return value ? Number(value) : undefined;
@@ -76,6 +78,21 @@ function createInitialStagePages() {
   }, {} as Record<CrmStage, number>);
 }
 
+function useIsMobilePipeline() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(media.matches);
+
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return isMobile;
+}
+
 function PipelineLoadingFallback() {
   return (
     <div data-testid="pipeline-loading" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -92,6 +109,7 @@ function CrmPipelineContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { isAdmin, isSalesManager, user } = useAuth();
+  const isMobilePipeline = useIsMobilePipeline();
   const [ownerId, setOwnerId] = useState('');
   const [priority, setPriority] = useState('');
   const [phoneSearch, setPhoneSearch] = useState('');
@@ -99,6 +117,7 @@ function CrmPipelineContent() {
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
+  const [activeMobileTab, setActiveMobileTab] = useState<string>(CrmStage.NEW);
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
@@ -198,6 +217,23 @@ function CrmPipelineContent() {
     () => (needsRetry ?? []).filter((call) => retryMatchesSearch(call, effectivePhoneSearch ? phoneSearchDigits : '')),
     [effectivePhoneSearch, needsRetry, phoneSearchDigits],
   );
+  const mobileTabs = [
+    ...PIPELINE_STAGES.map((stage) => ({
+      id: stage,
+      label: stage === CrmStage.NOT_ANSWERED ? 'No Answer' : crmStageLabel(stage),
+      count: countForStage(stage),
+    })),
+    {
+      id: MOBILE_TASKS_TAB,
+      label: 'Tasks',
+      count: requiredTasks.length,
+    },
+    {
+      id: MOBILE_RETRY_TAB,
+      label: 'Retry',
+      count: retryCalls.length,
+    },
+  ];
   const refetchLeads = () => {
     stageQueries.forEach((query) => query.refetch());
   };
@@ -278,11 +314,15 @@ function CrmPipelineContent() {
               Track leads by stage, owner, priority, and next action.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setShowAddModal(true)}>
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setShowAddModal(true)}
+            >
               <Plus className="mr-1 h-4 w-4" /> Add Number
             </Button>
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
+            <div className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-sm text-gray-600 sm:w-auto">
               Total leads: <span className="font-semibold text-gray-900">{totalLeads}</span>
             </div>
           </div>
@@ -322,7 +362,7 @@ function CrmPipelineContent() {
           </div>
         )}
 
-        {!leadsInitialLoading && !leadsError && (
+        {!leadsInitialLoading && !leadsError && !isMobilePipeline && (
           <div
             data-testid="crm-pipeline-board"
             className="overflow-x-auto pb-3"
@@ -385,6 +425,96 @@ function CrmPipelineContent() {
           </div>
         )}
 
+        {!leadsInitialLoading && !leadsError && isMobilePipeline && (
+          <div data-testid="crm-pipeline-mobile" className="space-y-3">
+            <div data-testid="pipeline-mobile-tabs" className="overflow-x-auto pb-1">
+              <div className="flex w-max min-w-full gap-2">
+                {mobileTabs.map((tab) => {
+                  const isActive = activeMobileTab === tab.id;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      data-testid={`pipeline-mobile-tab-${tab.id}`}
+                      aria-pressed={isActive}
+                      className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}
+                      onClick={() => setActiveMobileTab(tab.id)}
+                    >
+                      <span>{tab.label}</span>
+                      <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-gray-700">
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div data-testid="pipeline-mobile-panel">
+              {PIPELINE_STAGES.includes(activeMobileTab as CrmStage) && (
+                <PipelineStageColumn
+                  stage={activeMobileTab as CrmStage}
+                  count={countForStage(activeMobileTab as CrmStage)}
+                  leads={leadsForStage(activeMobileTab as CrmStage)}
+                  stages={PIPELINE_STAGES}
+                  page={stagePages[activeMobileTab as CrmStage] ?? 1}
+                  totalPages={totalPagesForStage(activeMobileTab as CrmStage)}
+                  updatingLeadId={updatingLeadId}
+                  layout="mobile"
+                  onPreview={openLeadDetail}
+                  onMoveStage={handleMoveStage}
+                  onPageChange={handlePageChange}
+                />
+              )}
+
+              {activeMobileTab === MOBILE_TASKS_TAB && (
+                <PipelineActionColumn
+                  title="Tasks Required"
+                  count={requiredTasks.length}
+                  testId="pipeline-actions-tasks-required-mobile"
+                  tone="red"
+                  isLoading={requiredTasksLoading}
+                  isError={requiredTasksError}
+                  emptyTitle="No required tasks"
+                  layout="mobile"
+                  onRetry={() => refetchRequiredTasks()}
+                >
+                  {requiredTasks.map((task) => (
+                    <PipelineTaskCard
+                      key={task.id}
+                      task={task}
+                      onPreviewLead={openLeadDetailById}
+                    />
+                  ))}
+                </PipelineActionColumn>
+              )}
+
+              {activeMobileTab === MOBILE_RETRY_TAB && (
+                <PipelineActionColumn
+                  title="Needs Retry"
+                  count={retryCalls.length}
+                  testId="pipeline-actions-needs-retry-mobile"
+                  tone="amber"
+                  isLoading={needsRetryLoading}
+                  isError={needsRetryError}
+                  emptyTitle="No calls need retry"
+                  layout="mobile"
+                  onRetry={() => refetchNeedsRetry()}
+                >
+                  {retryCalls.map((call) => (
+                    <PipelineRetryCard key={call.id} call={call} />
+                  ))}
+                </PipelineActionColumn>
+              )}
+            </div>
+          </div>
+        )}
+
         <LeadDetailDrawer
           leadId={selectedLeadId}
           stages={PIPELINE_STAGES}
@@ -395,20 +525,29 @@ function CrmPipelineContent() {
         <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Number">
           <div className="space-y-4">
             <Input
+              id="pipeline-add-phone-number"
+              name="phoneNumber"
               label="Phone Number"
               value={addForm.phoneNumber}
               onChange={(event) => setAddForm({ ...addForm, phoneNumber: event.target.value })}
               placeholder="+201234567890"
+              className="min-h-11 text-base sm:min-h-0 sm:text-sm"
               required
             />
             <Input
+              id="pipeline-add-client-name"
+              name="clientName"
               label="Client Name"
               value={addForm.clientName || ''}
+              className="min-h-11 text-base sm:min-h-0 sm:text-sm"
               onChange={(event) => setAddForm({ ...addForm, clientName: event.target.value })}
             />
             <Input
+              id="pipeline-add-source"
+              name="source"
               label="Source"
               value={addForm.source || ''}
+              className="min-h-11 text-base sm:min-h-0 sm:text-sm"
               onChange={(event) => setAddForm({ ...addForm, source: event.target.value })}
             />
             <Button

@@ -65,6 +65,7 @@ export function PipelineFilters({
           aria-label="Employee filter"
           options={employeeOptions}
           value={ownerId}
+          className="min-h-11 text-base sm:min-h-0 sm:text-sm"
           onChange={(event) => onOwnerChange(event.target.value)}
         />
         <Select
@@ -73,6 +74,7 @@ export function PipelineFilters({
           aria-label="Priority filter"
           options={priorityOptions}
           value={priority}
+          className="min-h-11 text-base sm:min-h-0 sm:text-sm"
           onChange={(event) => onPriorityChange(event.target.value)}
         />
         <Input
@@ -83,6 +85,7 @@ export function PipelineFilters({
           placeholder="Search phone, min 5 digits"
           value={phoneSearch}
           error={phoneSearchError}
+          className="min-h-11 text-base sm:min-h-0 sm:text-sm"
           onChange={(event) => onPhoneSearchChange(event.target.value)}
         />
       </div>

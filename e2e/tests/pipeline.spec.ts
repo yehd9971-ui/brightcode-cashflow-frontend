@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { loginApiByRole, loginByRole, newContextForRole } from '../helpers/auth-roles';
 import {
+  clearActiveCallWithReportApi,
   createCallApi,
   createCallTaskApi,
   deleteCrmLeadApi,
   ensureClientNumberApi,
+  getMyCallStatusApi,
   getUsers,
+  searchNumbersApi,
   updateCrmLeadStageApi,
 } from '../helpers/api-client';
 import { createTestNumberFixture } from '../helpers/crm-fixtures';
@@ -282,19 +285,123 @@ test.describe('CRM Pipeline UI', () => {
     await context.close();
   });
 
-  test('pipeline remains horizontally scrollable on mobile viewport', async ({ browser }) => {
+  test('pipeline uses mobile stage tabs without page overflow', async ({ browser }) => {
     const admin = await loginApiByRole('ADMIN');
     const lead = await createPipelineLead(admin.accessToken, { stage: 'FOLLOWING_UP', priority: 2 });
+    await createPipelineTask(admin.accessToken, 'today');
+    const retry = await createTestNumberFixture(admin.accessToken, uniqueTestPhone());
+    await createCallApi(
+      {
+        clientPhoneNumber: retry.phoneNumber,
+        callStatus: 'NOT_ANSWERED',
+        notes: `${TEST_RUN_PREFIX} mobile retry`,
+      },
+      admin.accessToken,
+    );
 
     const { context, page } = await newContextForRole(browser, 'ADMIN');
     await page.setViewportSize({ width: 390, height: 844 });
     const pipeline = new PipelinePage(page);
     await pipeline.goto();
 
+    await expect(pipeline.mobile).toBeVisible({ timeout: 15_000 });
+    await expect(pipeline.board).toHaveCount(0);
+    await expect(pipeline.mobileTab('NEW')).toBeVisible();
+    await expect(pipeline.mobileTab('TASKS_REQUIRED')).toBeVisible();
+    await expect(pipeline.mobileTab('NEEDS_RETRY')).toBeVisible();
+
+    await pipeline.mobileTab('FOLLOWING_UP').click();
     await expect(pipeline.column('FOLLOWING_UP')).toContainText(lead.phoneNumber);
-    await expect(pipeline.board).toBeVisible();
-    await expect.poll(async () => pipeline.board.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+
+    await pipeline.mobileTab('TASKS_REQUIRED').click();
+    await expect(pipeline.actionColumn('pipeline-actions-tasks-required-mobile')).toBeVisible();
+    await expect(pipeline.actionColumn('pipeline-actions-tasks-required-mobile').getByTestId('pipeline-task-card').first()).toBeVisible();
+
+    await pipeline.mobileTab('NEEDS_RETRY').click();
+    await expect(pipeline.actionColumn('pipeline-actions-needs-retry-mobile')).toContainText(retry.phoneNumber);
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+      )
+      .toBe(true);
 
     await context.close();
+  });
+
+  test('mobile pipeline supports add, filter, move, tasks, and call report flow', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    await clearActiveCallWithReportApi(admin.accessToken);
+    const addedPhone = uniqueTestPhone(Date.now() + 9000);
+    const taskNote = `${TEST_RUN_PREFIX} mobile drawer task`;
+    let context: Awaited<ReturnType<typeof newContextForRole>>['context'] | undefined;
+
+    try {
+      const roleContext = await newContextForRole(browser, 'ADMIN');
+      context = roleContext.context;
+      const page = roleContext.page;
+      await page.setViewportSize({ width: 390, height: 844 });
+      const pipeline = new PipelinePage(page);
+      await pipeline.goto();
+
+      await expect(pipeline.mobile).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: 'Add Number' }).click();
+      const addDialog = page.locator('[role="dialog"]').filter({ hasText: 'Add Number' });
+      await addDialog.getByLabel('Phone Number').fill(addedPhone);
+      await addDialog.getByLabel('Client Name').fill(`${TEST_RUN_PREFIX} mobile add`);
+      await addDialog.getByLabel('Source').fill('Playwright Mobile');
+      await addDialog.getByRole('button', { name: /^Add$/ }).click();
+      await expect(page.getByText('Number added')).toBeVisible({ timeout: 15_000 });
+
+      await pipeline.mobileTab('NEW').click();
+      await pipeline.phoneSearch.fill(addedPhone);
+      await expect(pipeline.column('NEW')).toContainText(addedPhone, { timeout: 15_000 });
+
+      await pipeline.moveStage(addedPhone).selectOption('FOLLOWING_UP');
+      await expect(page.getByText('Stage updated')).toBeVisible({ timeout: 15_000 });
+      await pipeline.mobileTab('FOLLOWING_UP').click();
+      await expect(pipeline.column('FOLLOWING_UP')).toContainText(addedPhone, { timeout: 15_000 });
+
+      await pipeline.leadCard(addedPhone).getByRole('button', { name: addedPhone }).click();
+      await expect(pipeline.preview()).toBeVisible();
+      await expect(pipeline.preview()).toContainText(addedPhone);
+
+      await page.getByTestId('lead-detail-stage-select').selectOption('HOT_LEAD');
+      await expect(page.getByText('Stage updated')).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId('lead-detail-mark-sold').click();
+      await expect(page.getByText('Marked sold')).toBeVisible({ timeout: 15_000 });
+
+      await page.getByTestId('lead-detail-create-task').click();
+      const taskDialog = page.locator('[role="dialog"]').filter({ hasText: 'Task date' });
+      await taskDialog.getByLabel('Task date').fill(localDate(1));
+      await taskDialog.getByLabel('Task time').fill(localTime(11, 15));
+      await taskDialog.getByLabel('Notes').fill(taskNote);
+      await taskDialog.getByRole('button', { name: 'Create Task' }).click();
+      await expect(page.getByText('Task created', { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('lead-detail-next-task')).toContainText(taskNote, { timeout: 15_000 });
+      await page.getByTestId('lead-detail-next-task').getByRole('button', { name: 'Close' }).click();
+      const closeDialog = page.locator('[role="dialog"]').filter({ hasText: 'Close Task' });
+      await closeDialog.getByLabel('Close reason').fill(`${TEST_RUN_PREFIX} mobile close`);
+      await closeDialog.getByRole('button', { name: 'Close Task' }).click();
+      await expect(page.getByText('Task closed')).toBeVisible({ timeout: 15_000 });
+
+      await page.evaluate(() => {
+        window.open = () => null;
+      });
+      await page.getByTestId('lead-detail-call').click();
+      await expect(page).toHaveURL(/\/calls\/new\?phone=/, { timeout: 15_000 });
+      await expect(page.locator('input[placeholder="01xxxxxxxxx"]')).toHaveValue(addedPhone);
+      await page.getByRole('button', { name: 'Not Answered' }).click();
+      await expect(page.getByRole('button', { name: 'Log Call' })).toBeEnabled({ timeout: 15_000 });
+      await page.getByRole('button', { name: 'Log Call' }).click();
+      await expect(page).toHaveURL(/\/numbers/, { timeout: 15_000 });
+      await expect
+        .poll(async () => (await getMyCallStatusApi(admin.accessToken)).currentStatus)
+        .toBe('AVAILABLE');
+    } finally {
+      await context?.close();
+      const matches = await searchNumbersApi(addedPhone, admin.accessToken).catch(() => []);
+      await Promise.all(matches.map((lead) => deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined)));
+      await clearActiveCallWithReportApi(admin.accessToken).catch(() => undefined);
+    }
   });
 });
