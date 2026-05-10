@@ -4,7 +4,6 @@ import {
   clearActiveCallWithReportApi,
   createCallApi,
   createCallTaskApi,
-  createCrmLeadTaskApi,
   deleteCrmLeadApi,
   ensureClientNumberApi,
   getMyCallStatusApi,
@@ -167,9 +166,9 @@ test.describe('CRM Pipeline UI', () => {
     let context: Awaited<ReturnType<typeof newContextForRole>>['context'] | undefined;
 
     try {
-      await createCrmLeadTaskApi(
-        lead.id,
+      await createCallTaskApi(
         {
+          clientPhoneNumber: lead.phoneNumber,
           taskDate: localDate(0),
           taskTime: futureTodayTime(),
           notes,
