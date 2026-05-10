@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { Phone, Upload, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCall, getCalls } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
 import { markNotInterested, getMyNumbers, updateLeadStatus } from '@/lib/services/client-numbers';
-import { CallStatus, LeadStatus } from '@/types/api';
+import { CallStatus, ErrorResponse, LeadStatus } from '@/types/api';
 import { normalizePhoneNumber } from '@/utils/phone';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +17,11 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { FollowUpPrompt } from '@/components/calls/FollowUpPrompt';
 import { validateFile } from '@/types/api';
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const axiosError = error as AxiosError<ErrorResponse>;
+  return axiosError.response?.data?.message || (error instanceof Error ? error.message : fallback);
+}
 
 export default function LogCallPage() {
   const searchParams = useSearchParams();
@@ -88,12 +94,11 @@ export default function LogCallPage() {
         setLastCallPhone(phone);
         setShowFollowUp(true);
       } else {
-        router.push('/numbers');
+        router.push('/crm/pipeline');
       }
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.message || 'Failed to log call';
-      toast.error(message);
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to log call'));
     },
   });
 
@@ -109,7 +114,7 @@ export default function LogCallPage() {
       toast.success('Follow-up task created');
       queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
       setShowFollowUp(false);
-      router.push('/numbers');
+      router.push('/crm/pipeline');
     },
     onError: () => {
       toast.error('Failed to create follow-up task');
@@ -135,10 +140,10 @@ export default function LogCallPage() {
       queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
       queryClient.invalidateQueries({ queryKey: ['ni-pending'] });
       setShowFollowUp(false);
-      router.push('/numbers');
+      router.push('/crm/pipeline');
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed'));
     },
   });
 
@@ -154,18 +159,10 @@ export default function LogCallPage() {
       toast.success('Marked as Hot Lead!');
       queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed'));
     },
   });
-
-  const resetForm = () => {
-    setPhone('');
-    setCallStatus(CallStatus.ANSWERED);
-    setDuration('');
-    setNotes('');
-    setScreenshot(null);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -325,7 +322,7 @@ export default function LogCallPage() {
 
       <FollowUpPrompt
         isOpen={showFollowUp}
-        onClose={() => { setShowFollowUp(false); router.push('/numbers'); }}
+        onClose={() => { setShowFollowUp(false); router.push('/crm/pipeline'); }}
         onSubmit={(data) => followUpMutation.mutate(data)}
         onNotInterested={() => notInterestedMutation.mutate()}
         notInterestedLoading={notInterestedMutation.isPending}

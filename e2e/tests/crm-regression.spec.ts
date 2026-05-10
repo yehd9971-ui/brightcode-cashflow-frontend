@@ -15,7 +15,6 @@ import { assertLocalPlaywrightTargets } from '../helpers/local-readiness';
 import { localDate, localTime, TEST_RUN_PREFIX, uniqueTestPhone } from '../helpers/test-data';
 import { LeadDetailPage } from '../pages/lead-detail.page';
 import { PipelinePage } from '../pages/pipeline.page';
-import { WorkbenchPage } from '../pages/workbench.page';
 
 test.describe('CRM regression coverage', () => {
   test('regression: old open tasks stay visible until completion and keep follow-up timeline links', async ({ browser }) => {
@@ -50,9 +49,10 @@ test.describe('CRM regression coverage', () => {
     expect(followUps.length).toBeGreaterThan(0);
 
     const { context, page } = await newContextForRole(browser, 'ADMIN');
-    const workbench = new WorkbenchPage(page);
-    await workbench.goto();
-    await expect(workbench.section('workbench-overdue')).toContainText(lead.phoneNumber);
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+    await pipeline.phoneSearch.fill(lead.phoneNumber);
+    await expect(pipeline.actionColumn('pipeline-actions-tasks-required')).toContainText(lead.phoneNumber);
     await context.close();
 
     await completeCrmTaskApi(task.id, admin.accessToken);
@@ -87,6 +87,7 @@ test.describe('CRM regression coverage', () => {
     const { context, page } = await newContextForRole(browser, 'SALES_MANAGER');
     const pipeline = new PipelinePage(page);
     await pipeline.goto();
+    await pipeline.employeeFilter.selectOption('');
 
     await expect(pipeline.column('HOT_LEAD')).toContainText(hot.phoneNumber);
     await expect(pipeline.leadCard(hot.phoneNumber).getByText('Hot Lead', { exact: true }).first()).toBeVisible();
@@ -106,9 +107,10 @@ test.describe('CRM regression coverage', () => {
     const salesContext = await browser.newContext();
     const salesPage = await salesContext.newPage();
     await loginByRole(salesPage, 'SALES');
-    await expect(salesPage.getByText('CRM Pipeline')).toHaveCount(0);
+    await expect(salesPage.getByText('CRM Pipeline')).toBeVisible();
     await salesPage.goto('/crm/pipeline');
-    await expect(salesPage.getByText(/permission/i)).toBeVisible({ timeout: 10_000 });
+    await expect(salesPage.getByTestId('crm-pipeline-board')).toBeVisible({ timeout: 15_000 });
+    await expect(salesPage.getByTestId('pipeline-employee-filter').locator('option', { hasText: 'All employees' })).toHaveCount(0);
     await salesContext.close();
   });
 

@@ -46,13 +46,16 @@ async function createPipelineTask(token: string, kind: 'overdue' | 'today' | 'up
 }
 
 test.describe('CRM Pipeline UI', () => {
-  test('admin and sales manager can open pipeline while sales is blocked', async ({ browser }) => {
+  test('admin, sales manager, and sales can open pipeline with scoped employee filters', async ({ browser }) => {
     assertLocalPlaywrightTargets();
 
+    const admin = await loginApiByRole('ADMIN');
     const { context: adminContext, page: adminPage } = await newContextForRole(browser, 'ADMIN');
     const adminPipeline = new PipelinePage(adminPage);
     await adminPipeline.goto();
     await expect(adminPipeline.board).toBeVisible();
+    await expect(adminPipeline.employeeFilter.locator('option', { hasText: 'info@brightc0de.com' })).toHaveCount(1);
+    await expect(adminPipeline.employeeFilter).toHaveValue(admin.user.id);
     await expect(adminPipeline.column('NEW')).toBeVisible();
     await expect(adminPage.getByTestId('pipeline-stage-INTERESTED')).toHaveCount(0);
     const columns = adminPipeline.board.locator(':scope > div > section');
@@ -78,12 +81,16 @@ test.describe('CRM Pipeline UI', () => {
     await expect(managerPipeline.board).toBeVisible();
     await managerContext.close();
 
+    const sales = await loginApiByRole('SALES');
     const salesContext = await browser.newContext();
     const salesPage = await salesContext.newPage();
     await loginByRole(salesPage, 'SALES');
-    await expect(salesPage.getByText('CRM Pipeline')).toHaveCount(0);
-    await salesPage.goto('/crm/pipeline');
-    await expect(salesPage.getByText(/permission/i)).toBeVisible({ timeout: 10_000 });
+    await expect(salesPage.getByText('CRM Pipeline')).toBeVisible();
+    const salesPipeline = new PipelinePage(salesPage);
+    await salesPipeline.goto();
+    await expect(salesPipeline.board).toBeVisible();
+    await expect(salesPipeline.employeeFilter).toHaveValue(sales.user.id);
+    await expect(salesPipeline.employeeFilter.locator('option', { hasText: 'All employees' })).toHaveCount(0);
     await salesContext.close();
   });
 
@@ -153,7 +160,10 @@ test.describe('CRM Pipeline UI', () => {
     await expect(tasksColumn).toContainText(overdue.phoneNumber);
     await expect(tasksColumn).toContainText(today.phoneNumber);
     await expect(tasksColumn).not.toContainText(upcoming.phoneNumber);
-    await expect(pipeline.actionColumn('pipeline-actions-needs-retry')).toContainText(retry.phoneNumber);
+    const retryColumn = pipeline.actionColumn('pipeline-actions-needs-retry');
+    await expect(retryColumn).toContainText(retry.phoneNumber);
+    await expect(retryColumn.getByRole('button', { name: retry.phoneNumber, exact: true })).toBeVisible();
+    await expect(retryColumn.getByRole('button', { name: `Open details ${retry.phoneNumber}` })).toBeVisible();
 
     await context.close();
   });
@@ -209,6 +219,8 @@ test.describe('CRM Pipeline UI', () => {
       await expect(taskCard).toBeVisible({ timeout: 15_000 });
       await expect(taskCard.getByRole('button', { name: `Open details ${lead.phoneNumber}` })).toBeVisible();
       await expect(taskCard.getByRole('button', { name: `Call ${lead.phoneNumber}` })).toBeVisible();
+      await expect(taskCard.getByRole('button', { name: `Complete task ${lead.phoneNumber}` })).toBeVisible();
+      await expect(taskCard.getByRole('button', { name: `Close task ${lead.phoneNumber}` })).toBeVisible();
 
       await taskCard.getByRole('button', { name: lead.phoneNumber, exact: true }).click();
       await expect(pipeline.preview()).toBeVisible({ timeout: 15_000 });
@@ -233,6 +245,72 @@ test.describe('CRM Pipeline UI', () => {
         window.open = () => null;
       });
       await mobileCard.getByRole('button', { name: `Call ${lead.phoneNumber}` }).click();
+      await expect(page).toHaveURL(/\/calls\/new\?phone=/, { timeout: 15_000 });
+      await expect(page.locator('input[placeholder="01xxxxxxxxx"]')).toHaveValue(lead.phoneNumber);
+    } finally {
+      await context?.close();
+      await deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined);
+      await clearActiveCallWithReportApi(admin.accessToken).catch(() => undefined);
+    }
+  });
+
+  test('needs retry cards open details and start calls', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    await clearActiveCallWithReportApi(admin.accessToken);
+    const lead = await createTestNumberFixture(admin.accessToken, uniqueTestPhone());
+    const retryCallId = '33333333-3333-4333-8333-333333333333';
+    let context: Awaited<ReturnType<typeof newContextForRole>>['context'] | undefined;
+
+    try {
+      const roleContext = await newContextForRole(browser, 'ADMIN');
+      context = roleContext.context;
+      const page = roleContext.page;
+      await page.route('**/calls/needs-retry**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: retryCallId,
+              userId: admin.user.id,
+              clientPhoneNumber: lead.phoneNumber,
+              rawPhoneNumber: lead.phoneNumber,
+              callStatus: 'NOT_ANSWERED',
+              approvalStatus: 'PENDING',
+              dateEgypt: localDate(0),
+              isCounted: false,
+              user: { id: admin.user.id, email: 'info@brightc0de.com', role: admin.user.role },
+              createdAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+              updatedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+            },
+          ]),
+        });
+      });
+      await page.route(`**/calls/${retryCallId}/ensure-client-number`, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(lead),
+        });
+      });
+
+      const pipeline = new PipelinePage(page);
+      await pipeline.goto();
+      await pipeline.phoneSearch.fill(lead.phoneNumber);
+
+      const retryCard = pipeline
+        .actionColumn('pipeline-actions-needs-retry')
+        .locator(`[data-testid="pipeline-retry-card"][data-phone="${lead.phoneNumber}"]`);
+      await expect(retryCard).toBeVisible({ timeout: 15_000 });
+
+      await retryCard.getByRole('button', { name: lead.phoneNumber, exact: true }).click();
+      await expect(pipeline.preview()).toContainText(lead.phoneNumber, { timeout: 15_000 });
+      await page.getByTestId('lead-detail-close').click();
+
+      await page.evaluate(() => {
+        window.open = () => null;
+      });
+      await retryCard.getByRole('button', { name: `Call ${lead.phoneNumber}` }).click();
       await expect(page).toHaveURL(/\/calls\/new\?phone=/, { timeout: 15_000 });
       await expect(page.locator('input[placeholder="01xxxxxxxxx"]')).toHaveValue(lead.phoneNumber);
     } finally {
@@ -289,6 +367,39 @@ test.describe('CRM Pipeline UI', () => {
     }
   });
 
+  test('admin can complete and close required tasks from pipeline', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const completeNumber = await createPipelineTask(admin.accessToken, 'today');
+    const closeNumber = await createPipelineTask(admin.accessToken, 'today');
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    await pipeline.phoneSearch.fill(completeNumber.phoneNumber);
+    const completeCard = pipeline
+      .actionColumn('pipeline-actions-tasks-required')
+      .locator(`[data-testid="pipeline-task-card"][data-phone="${completeNumber.phoneNumber}"]`);
+    await expect(completeCard).toBeVisible({ timeout: 15_000 });
+    await completeCard.getByRole('button', { name: `Complete task ${completeNumber.phoneNumber}` }).click();
+    await expect(page.getByText('Task completed')).toBeVisible({ timeout: 10_000 });
+    await expect(completeCard).toHaveCount(0);
+
+    await pipeline.phoneSearch.fill(closeNumber.phoneNumber);
+    const closeCard = pipeline
+      .actionColumn('pipeline-actions-tasks-required')
+      .locator(`[data-testid="pipeline-task-card"][data-phone="${closeNumber.phoneNumber}"]`);
+    await expect(closeCard).toBeVisible({ timeout: 15_000 });
+    await closeCard.getByRole('button', { name: `Close task ${closeNumber.phoneNumber}` }).click();
+    const closeDialog = page.getByRole('dialog', { name: 'Close Task' });
+    await closeDialog.getByLabel('Close Reason').fill(`${TEST_RUN_PREFIX} pipeline close`);
+    await closeDialog.getByRole('button', { name: /^Close Task$/ }).click();
+    await expect(page.getByText('Task closed')).toBeVisible({ timeout: 10_000 });
+    await expect(closeCard).toHaveCount(0);
+
+    await context.close();
+  });
+
   test('marks non-NO ANSWER leads when the last call was not answered', async ({ browser }) => {
     const sales = await loginApiByRole('SALES');
     const lead = await createPipelineLead(sales.accessToken, { stage: 'HOT_LEAD', priority: 4 });
@@ -313,15 +424,27 @@ test.describe('CRM Pipeline UI', () => {
     await context.close();
   });
 
-  test('sales manager can select self in the employee filter', async ({ browser }) => {
+  test('admin and sales manager default to self and can still select all employees', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const adminContext = await newContextForRole(browser, 'ADMIN');
+    const adminPipeline = new PipelinePage(adminContext.page);
+    await adminPipeline.goto();
+
+    await expect(adminPipeline.employeeFilter.locator('option', { hasText: 'info@brightc0de.com' })).toHaveCount(1);
+    await expect(adminPipeline.employeeFilter).toHaveValue(admin.user.id);
+    await adminPipeline.employeeFilter.selectOption('');
+    await expect(adminPipeline.employeeFilter).toHaveValue('');
+    await adminContext.context.close();
+
     const manager = await loginApiByRole('SALES_MANAGER');
     const { context, page } = await newContextForRole(browser, 'SALES_MANAGER');
     const pipeline = new PipelinePage(page);
     await pipeline.goto();
 
     await expect(pipeline.employeeFilter.locator('option', { hasText: 'yasmin@brightc0de.com' })).toHaveCount(1);
-    await pipeline.employeeFilter.selectOption(manager.user.id);
     await expect(pipeline.employeeFilter).toHaveValue(manager.user.id);
+    await pipeline.employeeFilter.selectOption('');
+    await expect(pipeline.employeeFilter).toHaveValue('');
 
     await context.close();
   });
@@ -524,7 +647,7 @@ test.describe('CRM Pipeline UI', () => {
       await page.getByRole('button', { name: 'Not Answered' }).click();
       await expect(page.getByRole('button', { name: 'Log Call' })).toBeEnabled({ timeout: 15_000 });
       await page.getByRole('button', { name: 'Log Call' }).click();
-      await expect(page).toHaveURL(/\/numbers/, { timeout: 15_000 });
+      await expect(page).toHaveURL(/\/crm\/pipeline/, { timeout: 15_000 });
       await expect
         .poll(async () => (await getMyCallStatusApi(admin.accessToken)).currentStatus)
         .toBe('AVAILABLE');

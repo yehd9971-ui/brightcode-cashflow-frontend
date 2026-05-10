@@ -11,6 +11,7 @@ interface PipelineFiltersProps {
   ownerId: string;
   priority: string;
   phoneSearch: string;
+  allowAllEmployees?: boolean;
   onOwnerChange: (value: string) => void;
   onPriorityChange: (value: string) => void;
   onPhoneSearchChange: (value: string) => void;
@@ -30,6 +31,7 @@ export function PipelineFilters({
   ownerId,
   priority,
   phoneSearch,
+  allowAllEmployees = true,
   onOwnerChange,
   onPriorityChange,
   onPhoneSearchChange,
@@ -40,7 +42,11 @@ export function PipelineFilters({
       ? 'Enter at least 5 digits'
       : undefined;
   const employeeMap = new Map<string, UserResponseDto>();
-  if (currentUser?.role === Role.SALES || currentUser?.role === Role.SALES_MANAGER) {
+  if (
+    currentUser?.role === Role.ADMIN ||
+    currentUser?.role === Role.SALES ||
+    currentUser?.role === Role.SALES_MANAGER
+  ) {
     employeeMap.set(currentUser.id, currentUser);
   }
   users
@@ -48,7 +54,7 @@ export function PipelineFilters({
     .forEach((user) => employeeMap.set(user.id, user));
 
   const employeeOptions = [
-    { value: '', label: 'All employees' },
+    ...(allowAllEmployees ? [{ value: '', label: 'All employees' }] : []),
     ...Array.from(employeeMap.values()).map((user) => ({ value: user.id, label: user.email })),
   ];
 

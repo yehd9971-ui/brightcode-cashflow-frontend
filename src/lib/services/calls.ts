@@ -11,6 +11,7 @@ import {
   DailyCallReportDto,
   BulkApproveCallsDto,
   BulkApproveResponseDto,
+  ClientNumberDto,
 } from '@/types/api';
 
 export async function getCalls(query?: CallQueryDto): Promise<CallList> {
@@ -105,5 +106,10 @@ export async function bulkApproveCalls(data: BulkApproveCallsDto): Promise<BulkA
 
 export async function getNeedsRetry(userId?: string): Promise<CallResponseDto[]> {
   const response = await api.get<CallResponseDto[]>('/calls/needs-retry', { params: userId ? { userId } : undefined });
+  return response.data;
+}
+
+export async function ensureClientNumberForCall(callId: string): Promise<ClientNumberDto> {
+  const response = await api.post<ClientNumberDto>(`/calls/${callId}/ensure-client-number`);
   return response.data;
 }

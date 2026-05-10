@@ -9,9 +9,8 @@ import {
   createTestNumberFixture,
 } from '../helpers/crm-fixtures';
 import { bestEffortCleanupTestData, getNeedsRetryApi, getTodayTasksApi } from '../helpers/api-client';
-import { expectTableRow, expectToast } from '../helpers/assertions';
+import { expectToast } from '../helpers/assertions';
 import { ADMIN, SALES_MANAGER, SALES_USER, uniqueTestPhone } from '../helpers/test-data';
-import { WorkbenchPage } from '../pages/workbench.page';
 import { PipelinePage } from '../pages/pipeline.page';
 import { LeadDetailPage } from '../pages/lead-detail.page';
 
@@ -71,19 +70,20 @@ test.describe('local setup readiness', () => {
     await expect(getNeedsRetryApi(manager.accessToken)).resolves.toBeTruthy();
   });
 
-  test('numbers navigation smoke opens workbench-compatible page', async ({ page }) => {
+  test('CRM navigation smoke opens sales-scoped pipeline page', async ({ page }) => {
     await loginByRole(page, 'SALES');
-    const workbench = new WorkbenchPage(page);
-    await workbench.goto();
-    await expect(workbench.heading).toBeVisible();
-    await expect(workbench.addNumberBtn).toBeVisible();
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+    await expect(pipeline.heading).toBeVisible();
+    await expect(pipeline.employeeFilter.locator('option', { hasText: 'All employees' })).toHaveCount(0);
   });
 
-  test('numbers navigation smoke opens admin pool page', async ({ page }) => {
+  test('removed numbers routes do not render work pages', async ({ page }) => {
     await loginByRole(page, 'ADMIN');
+    await page.goto('/numbers');
+    await expect(page.locator('h1', { hasText: 'My Numbers' })).toHaveCount(0);
     await page.goto('/numbers/pool');
-    await expect(page.locator('h1', { hasText: 'Number Pool' })).toBeVisible({ timeout: 15_000 });
-    await expectTableRow(page, /Available|Assigned|Total/);
+    await expect(page.locator('h1', { hasText: 'Number Pool' })).toHaveCount(0);
   });
 
   test('setup page objects are compile-safe for future CRM pages', async ({ page }) => {

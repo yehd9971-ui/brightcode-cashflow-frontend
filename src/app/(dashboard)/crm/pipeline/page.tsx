@@ -17,13 +17,14 @@ import { PipelineFilters } from '@/components/crm/pipeline/PipelineFilters';
 import { PipelineStageColumn } from '@/components/crm/pipeline/PipelineStageColumn';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Modal } from '@/components/ui/Modal';
 import { ensureClientNumberForTask, getOpenTasks } from '@/lib/services/call-tasks';
-import { getNeedsRetry } from '@/lib/services/calls';
+import { ensureClientNumberForCall, getNeedsRetry } from '@/lib/services/calls';
 import { addNumber } from '@/lib/services/client-numbers';
-import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
+import { closeCrmTask, completeCrmTask, getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,6 +49,12 @@ const MOBILE_RETRY_TAB = 'NEEDS_RETRY';
 
 function priorityValue(value: string) {
   return value ? Number(value) : undefined;
+}
+
+function formatWait(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 }
 
 function isRequiredTask(task: OpenTaskResponseDto) {
@@ -111,6 +118,7 @@ function CrmPipelineContent() {
   const { isAdmin, isSalesManager, user } = useAuth();
   const isMobilePipeline = useIsMobilePipeline();
   const [ownerId, setOwnerId] = useState('');
+  const [ownerFilterInitialized, setOwnerFilterInitialized] = useState(false);
   const [priority, setPriority] = useState('');
   const [phoneSearch, setPhoneSearch] = useState('');
   const [stagePages, setStagePages] = useState(createInitialStagePages);
@@ -118,6 +126,9 @@ function CrmPipelineContent() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
   const [resolvingTaskId, setResolvingTaskId] = useState<string | null>(null);
+  const [resolvingCallId, setResolvingCallId] = useState<string | null>(null);
+  const [taskToClose, setTaskToClose] = useState<OpenTaskResponseDto | null>(null);
+  const [closeReason, setCloseReason] = useState('');
   const [activeMobileTab, setActiveMobileTab] = useState<string>(CrmStage.NEW);
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
@@ -125,6 +136,18 @@ function CrmPipelineContent() {
   const effectivePhoneSearch = phoneSearchDigits.length >= 5 ? phoneSearch.trim() : undefined;
   const selectedPriority = priorityValue(priority);
   const operationalUserId = ownerId || undefined;
+  const canViewAllEmployees = isAdmin || isSalesManager;
+  const canMutateTasks = canViewAllEmployees;
+  const pipelineQueriesEnabled = Boolean(user) && ownerFilterInitialized;
+
+  useEffect(() => {
+    if (ownerFilterInitialized || !user) return;
+
+    if (user.role === Role.ADMIN || user.role === Role.SALES_MANAGER || user.role === Role.SALES) {
+      setOwnerId(user.id);
+    }
+    setOwnerFilterInitialized(true);
+  }, [ownerFilterInitialized, user]);
 
   const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
     ownerId: operationalUserId,
@@ -165,7 +188,7 @@ function CrmPipelineContent() {
       return {
         queryKey: ['crm', 'leads', 'pipeline', stage, query] as const,
         queryFn: () => getCrmLeads(query),
-        enabled: isAdmin || isSalesManager,
+        enabled: pipelineQueriesEnabled,
       };
     }),
   });
@@ -178,13 +201,13 @@ function CrmPipelineContent() {
   } = useQuery({
     queryKey: ['call-tasks', 'open', 'pipeline-required', requiredTasksQuery],
     queryFn: () => getOpenTasks(requiredTasksQuery),
-    enabled: isAdmin || isSalesManager,
+    enabled: pipelineQueriesEnabled,
   });
 
   const { data: callStatus } = useQuery({
     queryKey: ['my-call-status', 'pipeline'],
     queryFn: getMyCallStatus,
-    enabled: isAdmin || isSalesManager,
+    enabled: pipelineQueriesEnabled,
     refetchInterval: 15000,
   });
 
@@ -196,7 +219,7 @@ function CrmPipelineContent() {
   } = useQuery({
     queryKey: ['calls', 'needs-retry', 'pipeline', operationalUserId],
     queryFn: () => getNeedsRetry(operationalUserId),
-    enabled: isAdmin || isSalesManager,
+    enabled: pipelineQueriesEnabled,
   });
 
   const stageData = useMemo(() => {
@@ -214,7 +237,7 @@ function CrmPipelineContent() {
   const totalPagesForStage = (stage: CrmStage) => stageData[stage]?.totalPages ?? 1;
   const leadsForStage = (stage: CrmStage) => stageData[stage]?.data ?? [];
   const totalLeads = PIPELINE_STAGES.reduce((sum, stage) => sum + countForStage(stage), 0);
-  const leadsLoading = stageQueries.some((query) => query.isLoading);
+  const leadsLoading = !ownerFilterInitialized || stageQueries.some((query) => query.isLoading);
   const leadsInitialLoading = leadsLoading && stageQueries.every((query) => !query.data);
   const leadsError = stageQueries.some((query) => query.isError);
   const requiredTasks = useMemo(
@@ -225,6 +248,16 @@ function CrmPipelineContent() {
     () => (needsRetry ?? []).filter((call) => retryMatchesSearch(call, effectivePhoneSearch ? phoneSearchDigits : '')),
     [effectivePhoneSearch, needsRetry, phoneSearchDigits],
   );
+  const retryWaitMap = useMemo(() => {
+    const map = new Map<string, string>();
+    retryCalls.forEach((call) => {
+      const minutesLeft = 30 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
+      if (minutesLeft > 0) {
+        map.set(call.id, `Retry in ${formatWait(minutesLeft)}`);
+      }
+    });
+    return map;
+  }, [retryCalls]);
   const mobileTabs = [
     ...PIPELINE_STAGES.map((stage) => ({
       id: stage,
@@ -245,6 +278,16 @@ function CrmPipelineContent() {
   const refetchLeads = () => {
     stageQueries.forEach((query) => query.refetch());
   };
+
+  const invalidatePipelineData = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['call-tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['call-tasks', 'open'] });
+    queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
+    queryClient.invalidateQueries({ queryKey: ['crm', 'leads', 'pipeline'] });
+    queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
+    queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+    queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
+  }, [queryClient]);
 
   const moveStageMutation = useMutation({
     mutationFn: ({ lead, stage }: { lead: CrmLeadResponseDto; stage: CrmStage }) =>
@@ -281,6 +324,31 @@ function CrmPipelineContent() {
     },
     onError: (error) => {
       toast.error(apiErrorMessage(error, 'Failed to add'));
+    },
+  });
+
+  const completeTaskMutation = useMutation({
+    mutationFn: (task: OpenTaskResponseDto) => completeCrmTask(task.id),
+    onSuccess: () => {
+      toast.success('Task completed');
+      invalidatePipelineData();
+    },
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to complete task'));
+    },
+  });
+
+  const closeTaskMutation = useMutation({
+    mutationFn: ({ task, reason }: { task: OpenTaskResponseDto; reason: string }) =>
+      closeCrmTask(task.id, { closedReason: reason }),
+    onSuccess: () => {
+      toast.success('Task closed');
+      setTaskToClose(null);
+      setCloseReason('');
+      invalidatePipelineData();
+    },
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to close task'));
     },
   });
 
@@ -324,7 +392,28 @@ function CrmPipelineContent() {
     }
   }, [openLeadDetailById, queryClient, resolvingTaskId]);
 
-  const handleTaskCall = useCallback(async (phoneNumber: string) => {
+  const openLeadDetailByCall = useCallback(async (call: CallResponseDto) => {
+    if (resolvingCallId) return;
+
+    setResolvingCallId(call.id);
+    try {
+      const number = await ensureClientNumberForCall(call.id);
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] }),
+        queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] }),
+        queryClient.invalidateQueries({ queryKey: ['crm', 'leads', 'pipeline'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-numbers'] }),
+      ]);
+      openLeadDetailById(number.id);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Failed to open number details'));
+    } finally {
+      setResolvingCallId(null);
+    }
+  }, [openLeadDetailById, queryClient, resolvingCallId]);
+
+  const handlePipelineCall = useCallback(async (phoneNumber: string) => {
     const phone = phoneNumber.trim();
     if (!phone) return;
 
@@ -357,6 +446,14 @@ function CrmPipelineContent() {
       toast.error(apiErrorMessage(error, 'Failed to start call'));
     }
   }, [callStatus?.currentCallPhone, callStatus?.currentStatus, queryClient, router]);
+
+  const closeTask = () => {
+    if (!taskToClose || !closeReason.trim()) {
+      toast.error('Close reason is required');
+      return;
+    }
+    closeTaskMutation.mutate({ task: taskToClose, reason: closeReason.trim() });
+  };
 
   const closeLeadDetail = useCallback(() => {
     const params = new URLSearchParams(searchString);
@@ -397,6 +494,7 @@ function CrmPipelineContent() {
           ownerId={ownerId}
           priority={priority}
           phoneSearch={phoneSearch}
+          allowAllEmployees={canViewAllEmployees}
           onOwnerChange={(value) => {
             setOwnerId(value);
             setStagePages(createInitialStagePages());
@@ -425,7 +523,7 @@ function CrmPipelineContent() {
           </div>
         )}
 
-        {!leadsInitialLoading && !leadsError && !isMobilePipeline && (
+        {!leadsInitialLoading && ownerFilterInitialized && !leadsError && !isMobilePipeline && (
           <div
             data-testid="crm-pipeline-board"
             className="overflow-x-auto pb-3"
@@ -463,10 +561,18 @@ function CrmPipelineContent() {
                             task={task}
                             activeCallPhone={callStatus?.currentCallPhone}
                             isOnCall={callStatus?.currentStatus === 'ON_CALL'}
-                            onCall={handleTaskCall}
+                            onCall={handlePipelineCall}
                             onOpenLead={openLeadDetailById}
                             onOpenTaskDetails={openLeadDetailByTask}
+                            onComplete={(task) => completeTaskMutation.mutate(task)}
+                            onClose={(task) => {
+                              setCloseReason('');
+                              setTaskToClose(task);
+                            }}
+                            canComplete={canMutateTasks}
+                            canClose={canMutateTasks}
                             resolvingTaskId={resolvingTaskId}
+                            isMutating={completeTaskMutation.isPending || closeTaskMutation.isPending}
                           />
                         ))}
                       </PipelineActionColumn>
@@ -482,7 +588,16 @@ function CrmPipelineContent() {
                         onRetry={() => refetchNeedsRetry()}
                       >
                         {retryCalls.map((call) => (
-                          <PipelineRetryCard key={call.id} call={call} />
+                          <PipelineRetryCard
+                            key={call.id}
+                            call={call}
+                            activeCallPhone={callStatus?.currentCallPhone}
+                            isOnCall={callStatus?.currentStatus === 'ON_CALL'}
+                            waitLabel={retryWaitMap.get(call.id)}
+                            onCall={handlePipelineCall}
+                            onOpenDetails={openLeadDetailByCall}
+                            resolvingCallId={resolvingCallId}
+                          />
                         ))}
                       </PipelineActionColumn>
                     </>
@@ -493,7 +608,7 @@ function CrmPipelineContent() {
           </div>
         )}
 
-        {!leadsInitialLoading && !leadsError && isMobilePipeline && (
+        {!leadsInitialLoading && ownerFilterInitialized && !leadsError && isMobilePipeline && (
           <div data-testid="crm-pipeline-mobile" className="space-y-3">
             <div data-testid="pipeline-mobile-tabs" className="overflow-x-auto pb-1">
               <div className="flex w-max min-w-full gap-2">
@@ -558,10 +673,18 @@ function CrmPipelineContent() {
                       task={task}
                       activeCallPhone={callStatus?.currentCallPhone}
                       isOnCall={callStatus?.currentStatus === 'ON_CALL'}
-                      onCall={handleTaskCall}
+                      onCall={handlePipelineCall}
                       onOpenLead={openLeadDetailById}
                       onOpenTaskDetails={openLeadDetailByTask}
+                      onComplete={(task) => completeTaskMutation.mutate(task)}
+                      onClose={(task) => {
+                        setCloseReason('');
+                        setTaskToClose(task);
+                      }}
+                      canComplete={canMutateTasks}
+                      canClose={canMutateTasks}
                       resolvingTaskId={resolvingTaskId}
+                      isMutating={completeTaskMutation.isPending || closeTaskMutation.isPending}
                     />
                   ))}
                 </PipelineActionColumn>
@@ -580,7 +703,16 @@ function CrmPipelineContent() {
                   onRetry={() => refetchNeedsRetry()}
                 >
                   {retryCalls.map((call) => (
-                    <PipelineRetryCard key={call.id} call={call} />
+                    <PipelineRetryCard
+                      key={call.id}
+                      call={call}
+                      activeCallPhone={callStatus?.currentCallPhone}
+                      isOnCall={callStatus?.currentStatus === 'ON_CALL'}
+                      waitLabel={retryWaitMap.get(call.id)}
+                      onCall={handlePipelineCall}
+                      onOpenDetails={openLeadDetailByCall}
+                      resolvingCallId={resolvingCallId}
+                    />
                   ))}
                 </PipelineActionColumn>
               )}
@@ -638,13 +770,33 @@ function CrmPipelineContent() {
             </Button>
           </div>
         </Modal>
+        <Modal isOpen={Boolean(taskToClose)} onClose={() => setTaskToClose(null)} title="Close Task">
+          <div className="space-y-4">
+            <Textarea
+              id="pipeline-close-reason"
+              label="Close Reason"
+              value={closeReason}
+              onChange={(event) => setCloseReason(event.target.value)}
+              placeholder="Reason"
+              required
+            />
+            <Button
+              onClick={closeTask}
+              loading={closeTaskMutation.isPending}
+              disabled={!closeReason.trim()}
+              fullWidth
+            >
+              Close Task
+            </Button>
+          </div>
+        </Modal>
     </div>
   );
 }
 
 export default function CrmPipelinePage() {
   return (
-    <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER]}>
+    <ProtectedRoute requiredRoles={[Role.ADMIN, Role.SALES_MANAGER, Role.SALES]}>
       <Suspense fallback={<PipelineLoadingFallback />}>
         <CrmPipelineContent />
       </Suspense>

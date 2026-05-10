@@ -41,7 +41,7 @@ test.describe('Authentication', () => {
   });
 
   test('should redirect to login when accessing protected route unauthenticated', async ({ page }) => {
-    await page.goto('/numbers');
+    await page.goto('/crm/pipeline');
     await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { AlertTriangle, Clock, Eye, FileText, PhoneCall, PhoneOff } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Eye, FileText, PhoneCall, PhoneOff, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -118,7 +118,12 @@ export function PipelineTaskCard({
   onCall,
   onOpenLead,
   onOpenTaskDetails,
+  onComplete,
+  onClose,
+  canComplete,
+  canClose,
   resolvingTaskId,
+  isMutating,
 }: {
   task: OpenTaskResponseDto;
   activeCallPhone?: string | null;
@@ -126,7 +131,12 @@ export function PipelineTaskCard({
   onCall: (phone: string) => void;
   onOpenLead: (leadId: string) => void;
   onOpenTaskDetails: (task: OpenTaskResponseDto) => void;
+  onComplete?: (task: OpenTaskResponseDto) => void;
+  onClose?: (task: OpenTaskResponseDto) => void;
+  canComplete?: boolean;
+  canClose?: boolean;
   resolvingTaskId?: string | null;
+  isMutating?: boolean;
 }) {
   const client = task.clientNumber;
   const phone = task.rawPhoneNumber || client?.phoneNumber || task.clientPhoneNumber;
@@ -221,24 +231,76 @@ export function PipelineTaskCard({
             </>
           )}
         </Button>
+        {canComplete && onComplete && (
+          <Button
+            size="sm"
+            variant="outline"
+            loading={isMutating}
+            onClick={() => onComplete(task)}
+            aria-label={`Complete task ${phone}`}
+          >
+            <CheckCircle className="mr-1 h-4 w-4" /> Complete
+          </Button>
+        )}
+        {canClose && onClose && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isMutating}
+            onClick={() => onClose(task)}
+            aria-label={`Close task ${phone}`}
+          >
+            <XCircle className="mr-1 h-4 w-4" /> Close
+          </Button>
+        )}
       </div>
     </div>
   );
 }
 
-export function PipelineRetryCard({ call }: { call: CallResponseDto }) {
+export function PipelineRetryCard({
+  call,
+  activeCallPhone,
+  isOnCall,
+  waitLabel,
+  onCall,
+  onOpenDetails,
+  resolvingCallId,
+}: {
+  call: CallResponseDto;
+  activeCallPhone?: string | null;
+  isOnCall?: boolean;
+  waitLabel?: string;
+  onCall: (phone: string) => void;
+  onOpenDetails: (call: CallResponseDto) => void;
+  resolvingCallId?: string | null;
+}) {
+  const phone = call.rawPhoneNumber || call.clientPhoneNumber;
+  const activeDigits = phoneDigits(activeCallPhone);
+  const resolvingForThisCall = resolvingCallId === call.id;
+  const activeForThisPhone = Boolean(
+    activeDigits && [phone, call.clientPhoneNumber, call.rawPhoneNumber].some((value) => phoneDigits(value) === activeDigits),
+  );
+  const callDisabled = activeForThisPhone ? false : Boolean((isOnCall && !activeForThisPhone) || waitLabel);
+
   return (
     <div
       data-testid="pipeline-retry-card"
-      data-phone={call.rawPhoneNumber || call.clientPhoneNumber}
+      data-phone={phone}
       className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors hover:border-blue-300"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2 font-mono text-sm font-semibold text-blue-700">
+          <button
+            type="button"
+            onClick={() => onOpenDetails(call)}
+            disabled={resolvingForThisCall}
+            title="Open CRM details"
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left font-mono text-sm font-semibold text-blue-700 hover:underline disabled:cursor-wait disabled:opacity-70"
+          >
             <PhoneOff className="h-4 w-4 shrink-0" />
-            <span className="truncate">{call.rawPhoneNumber || call.clientPhoneNumber}</span>
-          </div>
+            <span className="truncate">{phone}</span>
+          </button>
           <p className="mt-1 truncate text-sm font-medium text-gray-900">
             {call.user?.email || 'Unassigned'}
           </p>
@@ -255,6 +317,38 @@ export function PipelineRetryCard({ call }: { call: CallResponseDto }) {
       <div className="mt-3 grid gap-1 text-xs text-gray-500">
         <span>First attempt: {formatDate(call.createdAt)}</span>
         <span className="truncate">Status: {call.approvalStatus.replace(/_/g, ' ')}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOpenDetails(call)}
+          loading={resolvingForThisCall}
+          aria-label={`Open details ${phone}`}
+        >
+          <Eye className="mr-1 h-4 w-4" /> Details
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => onCall(phone)}
+          disabled={callDisabled}
+          title={
+            isOnCall && !activeForThisPhone
+              ? `Active call: ${activeCallPhone}`
+              : waitLabel
+          }
+          aria-label={`${activeForThisPhone ? 'Fill report' : 'Call'} ${phone}`}
+        >
+          {activeForThisPhone ? (
+            <>
+              <FileText className="mr-1 h-4 w-4" /> Fill Report
+            </>
+          ) : (
+            <>
+              <PhoneCall className="mr-1 h-4 w-4" /> {waitLabel || 'Call'}
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );

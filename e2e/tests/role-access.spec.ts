@@ -31,32 +31,31 @@ test.describe('Role-Based Access Control', () => {
     await adminCtx?.close();
   });
 
-  test('SALES user sees "My Numbers" in sidebar but not "Number Pool"', async () => {
+  test('SALES user sees CRM Pipeline in sidebar but not removed Numbers pages', async () => {
     const sidebar = salesPage.locator('nav, aside, [class*="sidebar"]');
-    await expect(sidebar.getByText('My Numbers')).toBeVisible();
+    await expect(sidebar.getByText('CRM Pipeline')).toBeVisible();
+    await expect(sidebar.getByText('My Numbers')).not.toBeVisible();
     await expect(sidebar.getByText('Number Pool')).not.toBeVisible();
   });
 
-  test('SALES_MANAGER sees both "My Numbers" and "Number Pool" in sidebar', async () => {
+  test('SALES_MANAGER sees CRM Pipeline in sidebar but not removed Numbers pages', async () => {
     const sidebar = smPage.locator('nav, aside, [class*="sidebar"]');
-    await expect(sidebar.getByText('My Numbers')).toBeVisible();
-    await expect(sidebar.getByText('Number Pool')).toBeVisible();
+    await expect(sidebar.getByText('CRM Pipeline')).toBeVisible();
+    await expect(sidebar.getByText('My Numbers')).not.toBeVisible();
+    await expect(sidebar.getByText('Number Pool')).not.toBeVisible();
   });
 
-  test('ADMIN sees "Number Pool" but not "My Numbers" in sidebar', async () => {
+  test('ADMIN sees CRM Pipeline in sidebar but not removed Numbers pages', async () => {
     const sidebar = adminPage.locator('nav, aside, [class*="sidebar"]');
-    await expect(sidebar.getByText('Number Pool')).toBeVisible();
+    await expect(sidebar.getByText('CRM Pipeline')).toBeVisible();
+    await expect(sidebar.getByText('Number Pool')).not.toBeVisible();
     await expect(sidebar.getByText('My Numbers')).not.toBeVisible();
   });
 
-  test('SALES_MANAGER cannot see Bulk Import button on pool page', async () => {
+  test('removed Numbers routes no longer render work pages', async () => {
+    await smPage.goto('/numbers');
+    await expect(smPage.locator('h1', { hasText: 'My Numbers' })).toHaveCount(0);
     await smPage.goto('/numbers/pool');
-    await smPage.locator('h1', { hasText: 'Number Pool' }).waitFor({ timeout: 15_000 });
-    await expect(smPage.getByRole('button', { name: /Bulk Import/ })).not.toBeVisible();
-  });
-
-  test('SALES_MANAGER cannot see Approve Attempt button on pool page', async () => {
-    // Already on pool page from previous test
-    await expect(smPage.getByRole('button', { name: 'Approve Attempt' })).not.toBeVisible();
+    await expect(smPage.locator('h1', { hasText: 'Number Pool' })).toHaveCount(0);
   });
 });
