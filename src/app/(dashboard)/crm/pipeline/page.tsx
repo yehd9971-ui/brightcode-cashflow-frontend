@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, Plus } from 'lucide-react';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LeadDetailDrawer } from '@/components/crm/lead-detail';
 import {
@@ -15,16 +15,21 @@ import {
 } from '@/components/crm/pipeline/PipelineActionColumn';
 import { PipelineFilters } from '@/components/crm/pipeline/PipelineFilters';
 import { PipelineStageColumn } from '@/components/crm/pipeline/PipelineStageColumn';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Modal } from '@/components/ui/Modal';
 import { getOpenTasks } from '@/lib/services/call-tasks';
 import { getNeedsRetry } from '@/lib/services/calls';
+import { addNumber } from '@/lib/services/client-numbers';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getSalesUsers } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneNumber } from '@/utils/phone';
 import {
+  AddNumberDto,
   CallResponseDto,
   CrmLeadResponseDto,
   CrmLeadsQueryDto,
@@ -92,6 +97,8 @@ function CrmPipelineContent() {
   const [phoneSearch, setPhoneSearch] = useState('');
   const [stagePages, setStagePages] = useState(createInitialStagePages);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
@@ -216,6 +223,23 @@ function CrmPipelineContent() {
     },
   });
 
+  const addNumberMutation = useMutation({
+    mutationFn: (data: AddNumberDto) => addNumber(data),
+    onSuccess: () => {
+      toast.success('Number added');
+      setShowAddModal(false);
+      setAddForm({ phoneNumber: '' });
+      setStagePages(createInitialStagePages());
+      queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
+      queryClient.invalidateQueries({ queryKey: ['crm', 'leads', 'pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      queryClient.invalidateQueries({ queryKey: ['pool'] });
+    },
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to add'));
+    },
+  });
+
   const handleMoveStage = (lead: CrmLeadResponseDto, stage: CrmStage) => {
     if (lead.stage === stage || moveStageMutation.isPending) return;
     moveStageMutation.mutate({ lead, stage });
@@ -254,8 +278,13 @@ function CrmPipelineContent() {
               Track leads by stage, owner, priority, and next action.
             </p>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
-            Total leads: <span className="font-semibold text-gray-900">{totalLeads}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setShowAddModal(true)}>
+              <Plus className="mr-1 h-4 w-4" /> Add Number
+            </Button>
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
+              Total leads: <span className="font-semibold text-gray-900">{totalLeads}</span>
+            </div>
           </div>
         </div>
 
@@ -362,6 +391,41 @@ function CrmPipelineContent() {
           onClose={closeLeadDetail}
           onDeleted={closeLeadDetail}
         />
+
+        <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Number">
+          <div className="space-y-4">
+            <Input
+              label="Phone Number"
+              value={addForm.phoneNumber}
+              onChange={(event) => setAddForm({ ...addForm, phoneNumber: event.target.value })}
+              placeholder="+201234567890"
+              required
+            />
+            <Input
+              label="Client Name"
+              value={addForm.clientName || ''}
+              onChange={(event) => setAddForm({ ...addForm, clientName: event.target.value })}
+            />
+            <Input
+              label="Source"
+              value={addForm.source || ''}
+              onChange={(event) => setAddForm({ ...addForm, source: event.target.value })}
+            />
+            <Button
+              onClick={() => {
+                if (!addForm.phoneNumber.trim()) {
+                  toast.error('Phone number is required');
+                  return;
+                }
+                addNumberMutation.mutate(addForm);
+              }}
+              loading={addNumberMutation.isPending}
+              fullWidth
+            >
+              Add
+            </Button>
+          </div>
+        </Modal>
     </div>
   );
 }
