@@ -1,8 +1,9 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { AlertTriangle, Clock, PhoneOff } from 'lucide-react';
+import { AlertTriangle, Clock, Eye, FileText, PhoneCall, PhoneOff } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { CardSkeleton } from '@/components/ui/Loading';
@@ -53,6 +54,10 @@ function priorityLabel(priority?: number) {
 
 function taskStageLabel(stage?: CrmStage) {
   return stage ? crmStageLabel(stage) : 'No stage';
+}
+
+function phoneDigits(value?: string | null) {
+  return (value || '').replace(/\D/g, '');
 }
 
 export function PipelineActionColumn({
@@ -108,13 +113,26 @@ export function PipelineActionColumn({
 
 export function PipelineTaskCard({
   task,
-  onPreviewLead,
+  activeCallPhone,
+  isOnCall,
+  onCall,
+  onOpenLead,
 }: {
   task: OpenTaskResponseDto;
-  onPreviewLead: (leadId: string) => void;
+  activeCallPhone?: string | null;
+  isOnCall?: boolean;
+  onCall: (phone: string) => void;
+  onOpenLead: (leadId: string) => void;
 }) {
   const client = task.clientNumber;
   const phone = task.rawPhoneNumber || client?.phoneNumber || task.clientPhoneNumber;
+  const leadId = client?.id || task.clientNumberId;
+  const activeDigits = phoneDigits(activeCallPhone);
+  const activeForThisPhone = Boolean(
+    activeDigits &&
+      [phone, task.clientPhoneNumber, client?.phoneNumber].some((value) => phoneDigits(value) === activeDigits),
+  );
+  const callDisabled = Boolean(isOnCall && !activeForThisPhone);
   const badge = task.isOverdue
     ? taskBadge[OpenTaskBucket.OVERDUE]
     : taskBadge[task.bucket] ?? taskBadge[OpenTaskBucket.TODAY];
@@ -130,10 +148,10 @@ export function PipelineTaskCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          {client?.id ? (
+          {leadId ? (
             <button
               type="button"
-              onClick={() => onPreviewLead(client.id)}
+              onClick={() => onOpenLead(leadId)}
               className="flex min-w-0 items-center gap-2 text-left font-mono text-sm font-semibold text-blue-700 hover:underline"
             >
               <Clock className="h-4 w-4 shrink-0" />
@@ -167,6 +185,36 @@ export function PipelineTaskCard({
         <span>{task.source.replace(/_/g, ' ')}</span>
       </div>
       {task.notes && <p className="mt-2 line-clamp-2 text-xs text-gray-500">{task.notes}</p>}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {leadId && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenLead(leadId)}
+            aria-label={`Open details ${phone}`}
+          >
+            <Eye className="mr-1 h-4 w-4" /> Details
+          </Button>
+        )}
+        <Button
+          size="sm"
+          onClick={() => onCall(phone)}
+          disabled={callDisabled}
+          title={callDisabled ? `Active call: ${activeCallPhone}` : undefined}
+          aria-label={`${activeForThisPhone ? 'Fill report' : 'Call'} ${phone}`}
+        >
+          {activeForThisPhone ? (
+            <>
+              <FileText className="mr-1 h-4 w-4" /> Fill Report
+            </>
+          ) : (
+            <>
+              <PhoneCall className="mr-1 h-4 w-4" /> Call
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

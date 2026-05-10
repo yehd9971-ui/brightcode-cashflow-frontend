@@ -4,6 +4,7 @@ import {
   clearActiveCallWithReportApi,
   createCallApi,
   createCallTaskApi,
+  createCrmLeadTaskApi,
   deleteCrmLeadApi,
   ensureClientNumberApi,
   getMyCallStatusApi,
@@ -156,6 +157,69 @@ test.describe('CRM Pipeline UI', () => {
     await expect(pipeline.actionColumn('pipeline-actions-needs-retry')).toContainText(retry.phoneNumber);
 
     await context.close();
+  });
+
+  test('required task cards open details and start calls', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    await clearActiveCallWithReportApi(admin.accessToken);
+    const lead = await createTestNumberFixture(admin.accessToken, uniqueTestPhone());
+    const notes = `${TEST_RUN_PREFIX} pipeline task actions`;
+    let context: Awaited<ReturnType<typeof newContextForRole>>['context'] | undefined;
+
+    try {
+      await createCrmLeadTaskApi(
+        lead.id,
+        {
+          taskDate: localDate(0),
+          taskTime: futureTodayTime(),
+          notes,
+        },
+        admin.accessToken,
+      );
+
+      const roleContext = await newContextForRole(browser, 'ADMIN');
+      context = roleContext.context;
+      const page = roleContext.page;
+      const pipeline = new PipelinePage(page);
+      await pipeline.goto();
+      await pipeline.phoneSearch.fill(lead.phoneNumber);
+
+      const tasksColumn = pipeline.actionColumn('pipeline-actions-tasks-required');
+      const taskCard = tasksColumn.locator(`[data-testid="pipeline-task-card"][data-phone="${lead.phoneNumber}"]`);
+      await expect(taskCard).toBeVisible({ timeout: 15_000 });
+      await expect(taskCard.getByRole('button', { name: `Open details ${lead.phoneNumber}` })).toBeVisible();
+      await expect(taskCard.getByRole('button', { name: `Call ${lead.phoneNumber}` })).toBeVisible();
+
+      await taskCard.getByRole('button', { name: lead.phoneNumber, exact: true }).click();
+      await expect(pipeline.preview()).toBeVisible({ timeout: 15_000 });
+      await expect(pipeline.preview()).toContainText(lead.phoneNumber);
+      await page.getByTestId('lead-detail-close').click();
+      await expect(pipeline.preview()).toHaveCount(0);
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload();
+      await expect(pipeline.mobile).toBeVisible({ timeout: 15_000 });
+      await pipeline.phoneSearch.fill(lead.phoneNumber);
+      await pipeline.mobileTab('TASKS_REQUIRED').click();
+      const mobileCard = pipeline
+        .actionColumn('pipeline-actions-tasks-required-mobile')
+        .locator(`[data-testid="pipeline-task-card"][data-phone="${lead.phoneNumber}"]`);
+      await expect(mobileCard).toBeVisible({ timeout: 15_000 });
+      await mobileCard.getByRole('button', { name: `Open details ${lead.phoneNumber}` }).click();
+      await expect(pipeline.preview()).toContainText(lead.phoneNumber, { timeout: 15_000 });
+      await page.getByTestId('lead-detail-close').click();
+
+      await page.evaluate(() => {
+        window.open = () => null;
+      });
+      await mobileCard.getByRole('button', { name: `Call ${lead.phoneNumber}` }).click();
+      await expect(page).toHaveURL(/\/calls\/new\?phone=/, { timeout: 15_000 });
+      await expect(page.locator('input[placeholder="01xxxxxxxxx"]')).toHaveValue(lead.phoneNumber);
+    } finally {
+      await context?.close();
+      await deleteCrmLeadApi(lead.id, admin.accessToken).catch(() => undefined);
+      await clearActiveCallWithReportApi(admin.accessToken).catch(() => undefined);
+    }
   });
 
   test('marks non-NO ANSWER leads when the last call was not answered', async ({ browser }) => {

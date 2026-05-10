@@ -24,7 +24,7 @@ import { getOpenTasks } from '@/lib/services/call-tasks';
 import { getNeedsRetry } from '@/lib/services/calls';
 import { addNumber } from '@/lib/services/client-numbers';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
-import { getSalesUsers } from '@/lib/services/users';
+import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneNumber } from '@/utils/phone';
@@ -180,6 +180,13 @@ function CrmPipelineContent() {
     enabled: isAdmin || isSalesManager,
   });
 
+  const { data: callStatus } = useQuery({
+    queryKey: ['my-call-status', 'pipeline'],
+    queryFn: getMyCallStatus,
+    enabled: isAdmin || isSalesManager,
+    refetchInterval: 15000,
+  });
+
   const {
     data: needsRetry,
     isLoading: needsRetryLoading,
@@ -295,6 +302,40 @@ function CrmPipelineContent() {
     openLeadDetailById(lead.id);
   }, [openLeadDetailById]);
 
+  const handleTaskCall = useCallback(async (phoneNumber: string) => {
+    const phone = phoneNumber.trim();
+    if (!phone) return;
+
+    const currentStatus = callStatus?.currentStatus;
+    const activePhone = callStatus?.currentCallPhone || '';
+    const isSameActiveCall = Boolean(
+      currentStatus === 'ON_CALL' &&
+        phoneSearchKey(activePhone) &&
+        phoneSearchKey(activePhone) === phoneSearchKey(phone),
+    );
+
+    if (isSameActiveCall) {
+      router.push(`/calls/new?phone=${encodeURIComponent(phone)}`);
+      return;
+    }
+
+    if (currentStatus === 'ON_CALL') {
+      toast.error('Finish the active call report first');
+      return;
+    }
+
+    try {
+      await startCall(phone);
+      queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
+      window.open(`tel:${phone}`, '_self');
+      setTimeout(() => {
+        router.push(`/calls/new?phone=${encodeURIComponent(phone)}`);
+      }, 500);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Failed to start call'));
+    }
+  }, [callStatus?.currentCallPhone, callStatus?.currentStatus, queryClient, router]);
+
   const closeLeadDetail = useCallback(() => {
     const params = new URLSearchParams(searchString);
     params.delete('leadId');
@@ -398,7 +439,10 @@ function CrmPipelineContent() {
                           <PipelineTaskCard
                             key={task.id}
                             task={task}
-                            onPreviewLead={openLeadDetailById}
+                            activeCallPhone={callStatus?.currentCallPhone}
+                            isOnCall={callStatus?.currentStatus === 'ON_CALL'}
+                            onCall={handleTaskCall}
+                            onOpenLead={openLeadDetailById}
                           />
                         ))}
                       </PipelineActionColumn>
@@ -488,7 +532,10 @@ function CrmPipelineContent() {
                     <PipelineTaskCard
                       key={task.id}
                       task={task}
-                      onPreviewLead={openLeadDetailById}
+                      activeCallPhone={callStatus?.currentCallPhone}
+                      isOnCall={callStatus?.currentStatus === 'ON_CALL'}
+                      onCall={handleTaskCall}
+                      onOpenLead={openLeadDetailById}
                     />
                   ))}
                 </PipelineActionColumn>
