@@ -22,7 +22,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Modal } from '@/components/ui/Modal';
 import { getOpenTasks } from '@/lib/services/call-tasks';
 import { getNeedsRetry } from '@/lib/services/calls';
-import { addNumber } from '@/lib/services/client-numbers';
+import { addNumber, searchNumbers } from '@/lib/services/client-numbers';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
@@ -31,6 +31,7 @@ import { normalizePhoneNumber } from '@/utils/phone';
 import {
   AddNumberDto,
   CallResponseDto,
+  ClientNumberDto,
   CrmLeadResponseDto,
   CrmLeadsQueryDto,
   CrmLeadsResponseDto,
@@ -63,6 +64,26 @@ function retryMatchesSearch(call: CallResponseDto, searchDigits: string) {
   return (
     phoneSearchKey(call.clientPhoneNumber).includes(searchDigits) ||
     phoneSearchKey(call.rawPhoneNumber).includes(searchDigits)
+  );
+}
+
+function findNumberByPhone(numbers: ClientNumberDto[], phone: string) {
+  const searchKey = phoneSearchKey(phone);
+  if (!searchKey) return undefined;
+
+  return (
+    numbers.find((number) =>
+      [number.normalizedPhone, number.phoneNumber].some((value) => phoneSearchKey(value) === searchKey),
+    ) ??
+    numbers.find((number) =>
+      searchKey.length >= 7 &&
+      [number.normalizedPhone, number.phoneNumber].some((value) => {
+        const candidateKey = phoneSearchKey(value);
+        if (!candidateKey) return false;
+        return candidateKey.endsWith(searchKey) || searchKey.endsWith(candidateKey);
+      }),
+    ) ??
+    numbers[0]
   );
 }
 
@@ -117,6 +138,7 @@ function CrmPipelineContent() {
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddNumberDto>({ phoneNumber: '' });
+  const [resolvingTaskPhone, setResolvingTaskPhone] = useState<string | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<string>(CrmStage.NEW);
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
@@ -302,6 +324,28 @@ function CrmPipelineContent() {
     openLeadDetailById(lead.id);
   }, [openLeadDetailById]);
 
+  const openLeadDetailByPhone = useCallback(async (phoneNumber: string) => {
+    const phone = phoneNumber.trim();
+    if (!phone || resolvingTaskPhone) return;
+
+    setResolvingTaskPhone(phone);
+    try {
+      const matches = await searchNumbers(phone);
+      const number = findNumberByPhone(matches, phone);
+
+      if (!number) {
+        toast.error('No CRM details found for this number');
+        return;
+      }
+
+      openLeadDetailById(number.id);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Failed to find number details'));
+    } finally {
+      setResolvingTaskPhone(null);
+    }
+  }, [openLeadDetailById, resolvingTaskPhone]);
+
   const handleTaskCall = useCallback(async (phoneNumber: string) => {
     const phone = phoneNumber.trim();
     if (!phone) return;
@@ -443,6 +487,8 @@ function CrmPipelineContent() {
                             isOnCall={callStatus?.currentStatus === 'ON_CALL'}
                             onCall={handleTaskCall}
                             onOpenLead={openLeadDetailById}
+                            onOpenPhone={openLeadDetailByPhone}
+                            resolvingPhone={resolvingTaskPhone}
                           />
                         ))}
                       </PipelineActionColumn>
@@ -536,6 +582,8 @@ function CrmPipelineContent() {
                       isOnCall={callStatus?.currentStatus === 'ON_CALL'}
                       onCall={handleTaskCall}
                       onOpenLead={openLeadDetailById}
+                      onOpenPhone={openLeadDetailByPhone}
+                      resolvingPhone={resolvingTaskPhone}
                     />
                   ))}
                 </PipelineActionColumn>

@@ -117,17 +117,32 @@ export function PipelineTaskCard({
   isOnCall,
   onCall,
   onOpenLead,
+  onOpenPhone,
+  resolvingPhone,
 }: {
   task: OpenTaskResponseDto;
   activeCallPhone?: string | null;
   isOnCall?: boolean;
   onCall: (phone: string) => void;
   onOpenLead: (leadId: string) => void;
+  onOpenPhone: (phone: string) => void;
+  resolvingPhone?: string | null;
 }) {
   const client = task.clientNumber;
   const phone = task.rawPhoneNumber || client?.phoneNumber || task.clientPhoneNumber;
   const leadId = client?.id || task.clientNumberId;
   const activeDigits = phoneDigits(activeCallPhone);
+  const resolvingForThisPhone = Boolean(
+    resolvingPhone && phoneDigits(resolvingPhone) === phoneDigits(phone),
+  );
+  const openDetails = () => {
+    if (leadId) {
+      onOpenLead(leadId);
+      return;
+    }
+
+    onOpenPhone(phone);
+  };
   const activeForThisPhone = Boolean(
     activeDigits &&
       [phone, task.clientPhoneNumber, client?.phoneNumber].some((value) => phoneDigits(value) === activeDigits),
@@ -148,21 +163,16 @@ export function PipelineTaskCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          {leadId ? (
-            <button
-              type="button"
-              onClick={() => onOpenLead(leadId)}
-              className="flex min-w-0 items-center gap-2 text-left font-mono text-sm font-semibold text-blue-700 hover:underline"
-            >
-              <Clock className="h-4 w-4 shrink-0" />
-              <span className="truncate">{phone}</span>
-            </button>
-          ) : (
-            <div className="flex min-w-0 items-center gap-2 font-mono text-sm font-semibold text-gray-900">
-              <Clock className="h-4 w-4 shrink-0" />
-              <span className="truncate">{phone}</span>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={openDetails}
+            disabled={resolvingForThisPhone}
+            title={leadId ? undefined : 'Find CRM details by phone'}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left font-mono text-sm font-semibold text-blue-700 hover:underline disabled:cursor-wait disabled:opacity-70"
+          >
+            <Clock className="h-4 w-4 shrink-0" />
+            <span className="truncate">{phone}</span>
+          </button>
           <p className="mt-1 truncate text-sm font-medium text-gray-900">
             {client?.clientName || 'Unnamed client'}
           </p>
@@ -187,16 +197,15 @@ export function PipelineTaskCard({
       {task.notes && <p className="mt-2 line-clamp-2 text-xs text-gray-500">{task.notes}</p>}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {leadId && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpenLead(leadId)}
-            aria-label={`Open details ${phone}`}
-          >
-            <Eye className="mr-1 h-4 w-4" /> Details
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={openDetails}
+          loading={resolvingForThisPhone}
+          aria-label={`Open details ${phone}`}
+        >
+          <Eye className="mr-1 h-4 w-4" /> Details
+        </Button>
         <Button
           size="sm"
           onClick={() => onCall(phone)}

@@ -179,6 +179,27 @@ test.describe('CRM Pipeline UI', () => {
       const roleContext = await newContextForRole(browser, 'ADMIN');
       context = roleContext.context;
       const page = roleContext.page;
+      await page.route('**/call-tasks/open**', async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const nextBody = {
+          ...body,
+          data: Array.isArray(body.data)
+            ? body.data.map((task: Record<string, unknown>) => {
+                if (task.rawPhoneNumber !== lead.phoneNumber && task.clientPhoneNumber !== lead.phoneNumber) {
+                  return task;
+                }
+
+                const nextTask = { ...task };
+                delete nextTask.clientNumber;
+                delete nextTask.clientNumberId;
+                return nextTask;
+              })
+            : body.data,
+        };
+
+        await route.fulfill({ response, json: nextBody });
+      });
       const pipeline = new PipelinePage(page);
       await pipeline.goto();
       await pipeline.phoneSearch.fill(lead.phoneNumber);
