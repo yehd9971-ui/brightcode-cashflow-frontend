@@ -34,7 +34,7 @@ test.describe('Lead detail drawer UI', () => {
     await expect(pipeline.leadCard(lead.phoneNumber)).toBeVisible({ timeout: 15_000 });
     await detail.openFromPhone(lead.phoneNumber);
     await expect(detail.drawer).toContainText(lead.phoneNumber);
-    await expect(detail.stageSelect).toHaveValue('INTERESTED');
+    await expect(detail.stageSelect).toHaveValue('HOT_LEAD');
     await expect(detail.nextTask).toContainText(/No open task|Scheduled/i);
 
     await detail.closeButton.click();

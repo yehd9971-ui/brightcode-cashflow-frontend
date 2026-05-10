@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginApiByRole, loginByRole, newContextForRole } from '../helpers/auth-roles';
 import {
   createCallApi,
+  createCallTaskApi,
   deleteCrmLeadApi,
   ensureClientNumberApi,
   getUsers,
@@ -9,7 +10,7 @@ import {
 } from '../helpers/api-client';
 import { createTestNumberFixture } from '../helpers/crm-fixtures';
 import { assertLocalPlaywrightTargets } from '../helpers/local-readiness';
-import { TEST_RUN_PREFIX, uniqueTestPhone } from '../helpers/test-data';
+import { futureTodayTime, localDate, localTime, TEST_RUN_PREFIX, uniqueTestPhone } from '../helpers/test-data';
 import { PipelinePage } from '../pages/pipeline.page';
 
 async function createPipelineLead(
@@ -21,6 +22,26 @@ async function createPipelineLead(
   return lead;
 }
 
+async function createPipelineTask(token: string, kind: 'overdue' | 'today' | 'upcoming') {
+  const offsets = { overdue: -1, today: 0, upcoming: 1 } as const;
+  const taskTime = kind === 'today'
+    ? futureTodayTime()
+    : kind === 'overdue'
+      ? localTime(8, 15)
+      : localTime(10, 15);
+  const number = await createTestNumberFixture(token, uniqueTestPhone());
+  await createCallTaskApi(
+    {
+      clientPhoneNumber: number.phoneNumber,
+      taskDate: localDate(offsets[kind]),
+      taskTime,
+      notes: `${TEST_RUN_PREFIX} pipeline ${kind}`,
+    },
+    token,
+  );
+  return number;
+}
+
 test.describe('CRM Pipeline UI', () => {
   test('admin and sales manager can open pipeline while sales is blocked', async ({ browser }) => {
     assertLocalPlaywrightTargets();
@@ -30,6 +51,11 @@ test.describe('CRM Pipeline UI', () => {
     await adminPipeline.goto();
     await expect(adminPipeline.board).toBeVisible();
     await expect(adminPipeline.column('NEW')).toBeVisible();
+    await expect(adminPage.getByTestId('pipeline-stage-INTERESTED')).toHaveCount(0);
+    const columns = adminPipeline.board.locator(':scope > div > section');
+    await expect(columns.nth(0)).toHaveAttribute('data-testid', 'pipeline-stage-NEW');
+    await expect(columns.nth(1)).toHaveAttribute('data-testid', 'pipeline-actions-tasks-required');
+    await expect(columns.nth(2)).toHaveAttribute('data-testid', 'pipeline-actions-needs-retry');
     await expect(adminPipeline.column('NOT_ANSWERED')).toBeVisible();
     await expect(adminPipeline.column('NOT_ANSWERED').locator('h2')).toHaveText('NO ANSWER');
     await expect(adminPage.getByTestId('pipeline-stage-CONTACTED')).toHaveCount(0);
@@ -39,6 +65,7 @@ test.describe('CRM Pipeline UI', () => {
     await expect(adminPage.locator('option', { hasText: 'CONTACTED' })).toHaveCount(0);
     await expect(adminPage.locator('option', { hasText: 'PROPOSAL SENT' })).toHaveCount(0);
     await expect(adminPage.locator('option', { hasText: 'LOST' })).toHaveCount(0);
+    await expect(adminPage.locator('option').filter({ hasText: /^INTERESTED$/ })).toHaveCount(0);
     await expect(adminPage.locator('option', { hasText: 'NO ANSWER' }).first()).toBeAttached();
     await adminContext.close();
 
@@ -91,10 +118,39 @@ test.describe('CRM Pipeline UI', () => {
 
     await pipeline.employeeFilter.selectOption(salesUser.id);
     await pipeline.priorityFilter.selectOption('4');
-    await expect(pipeline.column('INTERESTED')).toContainText(lead.phoneNumber);
+    await expect(pipeline.column('HOT_LEAD')).toContainText(lead.phoneNumber);
+    await expect(pipeline.column('INTERESTED')).toHaveCount(0);
 
     await pipeline.priorityFilter.selectOption('1');
     await expect(pipeline.leadCard(lead.phoneNumber)).toHaveCount(0);
+
+    await context.close();
+  });
+
+  test('renders required tasks and retry columns after new leads', async ({ browser }) => {
+    const admin = await loginApiByRole('ADMIN');
+    const overdue = await createPipelineTask(admin.accessToken, 'overdue');
+    const today = await createPipelineTask(admin.accessToken, 'today');
+    const upcoming = await createPipelineTask(admin.accessToken, 'upcoming');
+    const retry = await createTestNumberFixture(admin.accessToken, uniqueTestPhone());
+    await createCallApi(
+      {
+        clientPhoneNumber: retry.phoneNumber,
+        callStatus: 'NOT_ANSWERED',
+        notes: `${TEST_RUN_PREFIX} pipeline retry`,
+      },
+      admin.accessToken,
+    );
+
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const pipeline = new PipelinePage(page);
+    await pipeline.goto();
+
+    const tasksColumn = pipeline.actionColumn('pipeline-actions-tasks-required');
+    await expect(tasksColumn).toContainText(overdue.phoneNumber);
+    await expect(tasksColumn).toContainText(today.phoneNumber);
+    await expect(tasksColumn).not.toContainText(upcoming.phoneNumber);
+    await expect(pipeline.actionColumn('pipeline-actions-needs-retry')).toContainText(retry.phoneNumber);
 
     await context.close();
   });

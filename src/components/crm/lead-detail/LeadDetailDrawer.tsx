@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import {
   CalendarClock,
@@ -41,6 +42,7 @@ import {
   CrmStage,
   CrmTaskSummaryDto,
   CrmTimelineItemDto,
+  ErrorResponse,
 } from '@/types/api';
 import { cn } from '@/utils/cn';
 
@@ -56,7 +58,17 @@ const TIMELINE_QUERY = { page: 1, limit: 50, order: 'desc' as const };
 function stageLabel(stage?: CrmStage | string) {
   if (!stage) return 'Unknown';
   if (stage === CrmStage.NOT_ANSWERED || stage === 'NOT_ANSWERED') return crmStageLabel(stage);
+  if (stage === CrmStage.INTERESTED || stage === 'INTERESTED') return crmStageLabel(stage);
   return String(stage).replace(/_/g, ' ');
+}
+
+function visibleStage(stage: CrmStage) {
+  return stage === CrmStage.INTERESTED ? CrmStage.HOT_LEAD : stage;
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const axiosError = error as AxiosError<ErrorResponse>;
+  return axiosError.response?.data?.message || fallback;
 }
 
 function priorityLabel(priority?: number) {
@@ -220,28 +232,34 @@ export function LeadDetailDrawer({
   const isSameActiveCall = Boolean(lead?.phoneNumber && activeCallPhone === lead.phoneNumber);
   const callDisabled = isOnCall && !isSameActiveCall;
 
-  useEffect(() => {
-    if (!leadId) {
-      setCreateTaskOpen(false);
-      setDeleteOpen(false);
-      setClosingTask(null);
-      return;
-    }
+  const closeDrawer = useCallback(() => {
+    setCreateTaskOpen(false);
+    setDeleteOpen(false);
+    setClosingTask(null);
+    setClosedReason('');
+    onClose();
+  }, [onClose]);
 
+  const openCreateTaskModal = useCallback(() => {
     setTaskDate(egyptDate(1));
     setTaskTime(defaultTaskTime());
     setTaskNotes('');
+    setCreateTaskOpen(true);
+  }, []);
+
+  const openCloseTaskModal = useCallback((task: CrmTaskSummaryDto) => {
     setClosedReason('');
-  }, [leadId]);
+    setClosingTask(task);
+  }, []);
 
   useEffect(() => {
     if (!leadId) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') closeDrawer();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [leadId, onClose]);
+  }, [closeDrawer, leadId]);
 
   const stageMutation = useMutation({
     mutationFn: ({ stage, payload }: { stage: CrmStage; payload?: Partial<CreateCrmLeadTaskDto> & { lostReason?: string } }) => {
@@ -253,8 +271,8 @@ export function LeadDetailDrawer({
         updateCachedStage(queryClient, leadId, stage, payload?.lostReason ? { lostReason: payload.lostReason } : undefined);
       }
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to update stage');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to update stage'));
       invalidateLeadQueries(queryClient, leadId);
     },
     onSuccess: (_data, variables) => {
@@ -268,8 +286,8 @@ export function LeadDetailDrawer({
       if (!leadId) throw new Error('Missing lead id');
       return createCrmLeadTask(leadId, data);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to create task');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to create task'));
     },
     onSuccess: () => {
       toast.success('Task created');
@@ -284,8 +302,8 @@ export function LeadDetailDrawer({
   const closeTaskMutation = useMutation({
     mutationFn: ({ taskId, reason }: { taskId: string; reason: string }) =>
       closeCrmTask(taskId, { closedReason: reason }),
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to close task');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to close task'));
     },
     onSuccess: () => {
       toast.success('Task closed');
@@ -300,8 +318,8 @@ export function LeadDetailDrawer({
       if (!leadId) throw new Error('Missing lead id');
       return deleteCrmLead(leadId);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to delete lead');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to delete lead'));
     },
     onSuccess: () => {
       toast.success('Lead deleted');
@@ -355,8 +373,8 @@ export function LeadDetailDrawer({
       setTimeout(() => {
         router.push(`/calls/new?phone=${encodeURIComponent(phone)}`);
       }, 500);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to start call');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Failed to start call'));
     }
   };
 
@@ -372,7 +390,7 @@ export function LeadDetailDrawer({
           type="button"
           aria-label="Close lead detail overlay"
           className="absolute inset-0 h-full w-full bg-gray-900/40"
-          onClick={onClose}
+          onClick={closeDrawer}
         />
 
         <aside
@@ -395,7 +413,7 @@ export function LeadDetailDrawer({
             <button
               data-testid="lead-detail-close"
               type="button"
-              onClick={onClose}
+              onClick={closeDrawer}
               className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Close lead detail"
             >
@@ -460,7 +478,7 @@ export function LeadDetailDrawer({
                         data-testid="lead-detail-create-task"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCreateTaskOpen(true)}
+                        onClick={openCreateTaskModal}
                       >
                         <Plus className="mr-2 h-4 w-4" /> Create Task
                       </Button>
@@ -498,7 +516,7 @@ export function LeadDetailDrawer({
                       <Select
                         data-testid="lead-detail-stage-select"
                         aria-label="Change lead stage"
-                        value={lead.stage}
+                        value={visibleStage(lead.stage)}
                         disabled={stageMutation.isPending}
                         options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
                         onChange={(event) => handleStageChange(event.target.value as CrmStage)}
@@ -526,7 +544,7 @@ export function LeadDetailDrawer({
                       <h3 className="text-sm font-semibold text-gray-900">Next task</h3>
                     </div>
                     {nextTask && canManageTasks && (
-                      <Button size="sm" variant="outline" onClick={() => setClosingTask(nextTask)}>
+                      <Button size="sm" variant="outline" onClick={() => openCloseTaskModal(nextTask)}>
                         Close
                       </Button>
                     )}
@@ -577,7 +595,7 @@ export function LeadDetailDrawer({
                                 <p className="text-xs text-gray-500">{stageLabel(task.status)}</p>
                               </div>
                               {canManageTasks && isOpenTask(task) && (
-                                <Button size="sm" variant="outline" onClick={() => setClosingTask(task)}>
+                                <Button size="sm" variant="outline" onClick={() => openCloseTaskModal(task)}>
                                   Close
                                 </Button>
                               )}

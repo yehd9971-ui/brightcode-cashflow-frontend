@@ -41,6 +41,10 @@ function nextActionWarning(value?: string) {
   return new Date(value).getTime() < Date.now() ? 'Overdue action' : '';
 }
 
+function visibleStage(stage: CrmStage) {
+  return stage === CrmStage.INTERESTED ? CrmStage.HOT_LEAD : stage;
+}
+
 export function PipelineLeadCard({
   lead,
   stages,
@@ -48,6 +52,7 @@ export function PipelineLeadCard({
   onPreview,
   onMoveStage,
 }: PipelineLeadCardProps) {
+  const displayStage = visibleStage(lead.stage);
   const stale = isStale(lead.lastContactedAt);
   const actionWarning = nextActionWarning(lead.nextActionAt);
   const lastCallNoAnswer =
@@ -83,7 +88,7 @@ export function PipelineLeadCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {lead.stage === CrmStage.HOT_LEAD && (
+        {displayStage === CrmStage.HOT_LEAD && (
           <Badge variant="warning" size="sm">
             <Flame className="mr-1 h-3 w-3" /> Hot Lead
           </Badge>
@@ -116,7 +121,7 @@ export function PipelineLeadCard({
       <div className="mt-3">
         <Select
           aria-label={`Move stage ${lead.phoneNumber}`}
-          value={lead.stage}
+          value={displayStage}
           disabled={isUpdating}
           options={stages.map((stage) => ({ value: stage, label: crmStageLabel(stage) }))}
           onChange={(event) => onMoveStage(lead, event.target.value as CrmStage)}

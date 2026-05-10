@@ -1,25 +1,38 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LayoutDashboard } from 'lucide-react';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LeadDetailDrawer } from '@/components/crm/lead-detail';
+import {
+  PipelineActionColumn,
+  PipelineRetryCard,
+  PipelineTaskCard,
+} from '@/components/crm/pipeline/PipelineActionColumn';
 import { PipelineFilters } from '@/components/crm/pipeline/PipelineFilters';
 import { PipelineStageColumn } from '@/components/crm/pipeline/PipelineStageColumn';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { getOpenTasks } from '@/lib/services/call-tasks';
+import { getNeedsRetry } from '@/lib/services/calls';
 import { getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getSalesUsers } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizePhoneNumber } from '@/utils/phone';
 import {
+  CallResponseDto,
   CrmLeadResponseDto,
   CrmLeadsQueryDto,
   CrmLeadsResponseDto,
   CrmStage,
+  ErrorResponse,
+  OpenTaskBucket,
+  OpenTaskResponseDto,
   Role,
 } from '@/types/api';
 
@@ -28,6 +41,27 @@ const PIPELINE_LIMIT = 50;
 
 function priorityValue(value: string) {
   return value ? Number(value) : undefined;
+}
+
+function isRequiredTask(task: OpenTaskResponseDto) {
+  return task.bucket === OpenTaskBucket.OVERDUE || task.bucket === OpenTaskBucket.TODAY || task.isOverdue;
+}
+
+function phoneSearchKey(value?: string) {
+  return normalizePhoneNumber(value || '').replace(/\D/g, '');
+}
+
+function retryMatchesSearch(call: CallResponseDto, searchDigits: string) {
+  if (!searchDigits) return true;
+  return (
+    phoneSearchKey(call.clientPhoneNumber).includes(searchDigits) ||
+    phoneSearchKey(call.rawPhoneNumber).includes(searchDigits)
+  );
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const axiosError = error as AxiosError<ErrorResponse>;
+  return axiosError.response?.data?.message || fallback;
 }
 
 function createInitialStagePages() {
@@ -62,18 +96,25 @@ function CrmPipelineContent() {
   const selectedLeadId = searchParams.get('leadId');
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
   const effectivePhoneSearch = phoneSearchDigits.length >= 5 ? phoneSearch.trim() : undefined;
+  const selectedPriority = priorityValue(priority);
+  const operationalUserId = ownerId || undefined;
 
   const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
-    ownerId: ownerId || undefined,
-    priority: priorityValue(priority),
+    ownerId: operationalUserId,
+    priority: selectedPriority,
     search: effectivePhoneSearch,
     sortBy: 'updatedAt',
     sortOrder: 'desc',
-  }), [effectivePhoneSearch, ownerId, priority]);
+  }), [effectivePhoneSearch, operationalUserId, selectedPriority]);
 
-  useEffect(() => {
-    setStagePages(createInitialStagePages());
-  }, [effectivePhoneSearch, ownerId, priority]);
+  const requiredTasksQuery = useMemo(() => ({
+    bucket: OpenTaskBucket.ALL,
+    page: 1,
+    limit: 100,
+    userId: operationalUserId,
+    priority: selectedPriority,
+    phoneNumber: effectivePhoneSearch,
+  }), [effectivePhoneSearch, operationalUserId, selectedPriority]);
 
   const {
     data: users,
@@ -89,6 +130,7 @@ function CrmPipelineContent() {
       const query: CrmLeadsQueryDto = {
         ...baseLeadsQuery,
         stage,
+        includeLegacyInterested: stage === CrmStage.HOT_LEAD ? true : undefined,
         page: stagePages[stage] ?? 1,
         limit: PIPELINE_LIMIT,
       };
@@ -99,6 +141,28 @@ function CrmPipelineContent() {
         enabled: isAdmin || isSalesManager,
       };
     }),
+  });
+
+  const {
+    data: openTasks,
+    isLoading: requiredTasksLoading,
+    isError: requiredTasksError,
+    refetch: refetchRequiredTasks,
+  } = useQuery({
+    queryKey: ['call-tasks', 'open', 'pipeline-required', requiredTasksQuery],
+    queryFn: () => getOpenTasks(requiredTasksQuery),
+    enabled: isAdmin || isSalesManager,
+  });
+
+  const {
+    data: needsRetry,
+    isLoading: needsRetryLoading,
+    isError: needsRetryError,
+    refetch: refetchNeedsRetry,
+  } = useQuery({
+    queryKey: ['calls', 'needs-retry', 'pipeline', operationalUserId],
+    queryFn: () => getNeedsRetry(operationalUserId),
+    enabled: isAdmin || isSalesManager,
   });
 
   const stageData = useMemo(() => {
@@ -119,6 +183,14 @@ function CrmPipelineContent() {
   const leadsLoading = stageQueries.some((query) => query.isLoading);
   const leadsInitialLoading = leadsLoading && stageQueries.every((query) => !query.data);
   const leadsError = stageQueries.some((query) => query.isError);
+  const requiredTasks = useMemo(
+    () => (openTasks?.data ?? []).filter(isRequiredTask),
+    [openTasks?.data],
+  );
+  const retryCalls = useMemo(
+    () => (needsRetry ?? []).filter((call) => retryMatchesSearch(call, effectivePhoneSearch ? phoneSearchDigits : '')),
+    [effectivePhoneSearch, needsRetry, phoneSearchDigits],
+  );
   const refetchLeads = () => {
     stageQueries.forEach((query) => query.refetch());
   };
@@ -126,12 +198,12 @@ function CrmPipelineContent() {
   const moveStageMutation = useMutation({
     mutationFn: ({ lead, stage }: { lead: CrmLeadResponseDto; stage: CrmStage }) =>
       updateCrmLeadStage(lead.id, { stage }),
-    onMutate: async ({ lead, stage }) => {
+    onMutate: async ({ lead }) => {
       setUpdatingLeadId(lead.id);
       await queryClient.cancelQueries({ queryKey: ['crm', 'leads', 'pipeline'] });
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to update stage');
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to update stage'));
     },
     onSuccess: () => {
       toast.success('Stage updated');
@@ -153,11 +225,15 @@ function CrmPipelineContent() {
     setStagePages((current) => ({ ...current, [stage]: page }));
   };
 
-  const openLeadDetail = useCallback((lead: CrmLeadResponseDto) => {
+  const openLeadDetailById = useCallback((leadId: string) => {
     const params = new URLSearchParams(searchString);
-    params.set('leadId', lead.id);
+    params.set('leadId', leadId);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchString]);
+
+  const openLeadDetail = useCallback((lead: CrmLeadResponseDto) => {
+    openLeadDetailById(lead.id);
+  }, [openLeadDetailById]);
 
   const closeLeadDetail = useCallback(() => {
     const params = new URLSearchParams(searchString);
@@ -189,9 +265,18 @@ function CrmPipelineContent() {
           ownerId={ownerId}
           priority={priority}
           phoneSearch={phoneSearch}
-          onOwnerChange={setOwnerId}
-          onPriorityChange={setPriority}
-          onPhoneSearchChange={setPhoneSearch}
+          onOwnerChange={(value) => {
+            setOwnerId(value);
+            setStagePages(createInitialStagePages());
+          }}
+          onPriorityChange={(value) => {
+            setPriority(value);
+            setStagePages(createInitialStagePages());
+          }}
+          onPhoneSearchChange={(value) => {
+            setPhoneSearch(value);
+            setStagePages(createInitialStagePages());
+          }}
         />
 
         {(leadsInitialLoading || usersLoading) && (
@@ -215,19 +300,57 @@ function CrmPipelineContent() {
           >
             <div className="flex min-w-max gap-4">
               {PIPELINE_STAGES.map((stage) => (
-                <PipelineStageColumn
-                  key={stage}
-                  stage={stage}
-                  count={countForStage(stage)}
-                  leads={leadsForStage(stage)}
-                  stages={PIPELINE_STAGES}
-                  page={stagePages[stage] ?? 1}
-                  totalPages={totalPagesForStage(stage)}
-                  updatingLeadId={updatingLeadId}
-                  onPreview={openLeadDetail}
-                  onMoveStage={handleMoveStage}
-                  onPageChange={handlePageChange}
-                />
+                <Fragment key={stage}>
+                  <PipelineStageColumn
+                    stage={stage}
+                    count={countForStage(stage)}
+                    leads={leadsForStage(stage)}
+                    stages={PIPELINE_STAGES}
+                    page={stagePages[stage] ?? 1}
+                    totalPages={totalPagesForStage(stage)}
+                    updatingLeadId={updatingLeadId}
+                    onPreview={openLeadDetail}
+                    onMoveStage={handleMoveStage}
+                    onPageChange={handlePageChange}
+                  />
+                  {stage === CrmStage.NEW && (
+                    <>
+                      <PipelineActionColumn
+                        title="Tasks Required"
+                        count={requiredTasks.length}
+                        testId="pipeline-actions-tasks-required"
+                        tone="red"
+                        isLoading={requiredTasksLoading}
+                        isError={requiredTasksError}
+                        emptyTitle="No required tasks"
+                        onRetry={() => refetchRequiredTasks()}
+                      >
+                        {requiredTasks.map((task) => (
+                          <PipelineTaskCard
+                            key={task.id}
+                            task={task}
+                            onPreviewLead={openLeadDetailById}
+                          />
+                        ))}
+                      </PipelineActionColumn>
+
+                      <PipelineActionColumn
+                        title="Needs Retry"
+                        count={retryCalls.length}
+                        testId="pipeline-actions-needs-retry"
+                        tone="amber"
+                        isLoading={needsRetryLoading}
+                        isError={needsRetryError}
+                        emptyTitle="No calls need retry"
+                        onRetry={() => refetchNeedsRetry()}
+                      >
+                        {retryCalls.map((call) => (
+                          <PipelineRetryCard key={call.id} call={call} />
+                        ))}
+                      </PipelineActionColumn>
+                    </>
+                  )}
+                </Fragment>
               ))}
             </div>
           </div>

@@ -28,6 +28,10 @@ export class PipelinePage {
     return this.page.getByTestId(`pipeline-stage-${stage}`);
   }
 
+  actionColumn(testId: string) {
+    return this.page.getByTestId(testId);
+  }
+
   leadCard(phone: string) {
     return this.page.locator(`[data-testid="pipeline-lead-card"][data-phone="${phone}"]`);
   }

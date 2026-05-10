@@ -846,6 +846,7 @@ export interface CrmLeadsQueryDto {
   page?: number;
   limit?: number;
   stage?: CrmStage;
+  includeLegacyInterested?: boolean;
   ownerId?: string;
   priority?: number;
   search?: string;
