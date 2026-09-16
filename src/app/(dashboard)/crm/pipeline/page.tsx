@@ -21,9 +21,10 @@ import { Textarea } from '@/components/ui/Textarea';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { ensureClientNumberForTask, getOpenTasks } from '@/lib/services/call-tasks';
 import { ensureClientNumberForCall, getNeedsRetry } from '@/lib/services/calls';
-import { addNumber } from '@/lib/services/client-numbers';
+import { addNumber, transferNumbers } from '@/lib/services/client-numbers';
 import { closeCrmTask, completeCrmTask, getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
@@ -40,6 +41,7 @@ import {
   OpenTaskBucket,
   OpenTaskResponseDto,
   Role,
+  TransferNumbersDto,
 } from '@/types/api';
 
 const PIPELINE_STAGES = CRM_PIPELINE_STAGES;
@@ -121,6 +123,11 @@ function CrmPipelineContent() {
   const [ownerFilterInitialized, setOwnerFilterInitialized] = useState(false);
   const [priority, setPriority] = useState('');
   const [phoneSearch, setPhoneSearch] = useState('');
+  const [transferredFilter, setTransferredFilter] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferTargetUserId, setTransferTargetUserId] = useState('');
+  const [transferError, setTransferError] = useState<string | null>(null);
   const [stagePages, setStagePages] = useState(createInitialStagePages);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -153,9 +160,10 @@ function CrmPipelineContent() {
     ownerId: operationalUserId,
     priority: selectedPriority,
     search: effectivePhoneSearch,
+    transferred: transferredFilter === '' ? undefined : transferredFilter === 'true',
     sortBy: 'updatedAt',
     sortOrder: 'desc',
-  }), [effectivePhoneSearch, operationalUserId, selectedPriority]);
+  }), [effectivePhoneSearch, operationalUserId, selectedPriority, transferredFilter]);
 
   const requiredTasksQuery = useMemo(() => ({
     bucket: OpenTaskBucket.ALL,
@@ -288,6 +296,77 @@ function CrmPipelineContent() {
     queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
     queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
   }, [queryClient]);
+
+  const toggleLeadSelection = useCallback((leadId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleStageSelectChange = useCallback((stage: CrmStage, leadIds: string[], checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      leadIds.forEach((leadId) => {
+        if (checked) {
+          next.add(leadId);
+        } else {
+          next.delete(leadId);
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const transferMutation = useMutation({
+    mutationFn: (dto: TransferNumbersDto) => transferNumbers(dto),
+    onSuccess: (result) => {
+      invalidatePipelineData();
+      setSelectedIds(new Set());
+      setTransferModalOpen(false);
+      setTransferTargetUserId('');
+      setTransferError(null);
+      toast.success(
+        result.skippedIds.length > 0
+          ? `Transferred ${result.transferredCount} numbers (${result.skippedIds.length} skipped)`
+          : `Transferred ${result.transferredCount} numbers`
+      );
+    },
+    onError: (error) => {
+      setTransferError(apiErrorMessage(error, 'Failed to transfer numbers'));
+    },
+  });
+
+  const openTransferModal = () => {
+    setTransferTargetUserId('');
+    setTransferError(null);
+    setTransferModalOpen(true);
+  };
+
+  const confirmTransfer = () => {
+    if (!transferTargetUserId) {
+      setTransferError('Select a target employee');
+      return;
+    }
+    setTransferError(null);
+    transferMutation.mutate({
+      numberIds: Array.from(selectedIds),
+      targetUserId: transferTargetUserId,
+    });
+  };
+
+  const transferTargetOptions = (users ?? [])
+    .filter(
+      (salesUser) =>
+        (salesUser.role === Role.SALES || salesUser.role === Role.SALES_MANAGER) &&
+        salesUser.isActive
+    )
+    .map((salesUser) => ({ value: salesUser.id, label: salesUser.email }));
 
   const moveStageMutation = useMutation({
     mutationFn: ({ lead, stage }: { lead: CrmLeadResponseDto; stage: CrmStage }) =>
@@ -494,6 +573,7 @@ function CrmPipelineContent() {
           ownerId={ownerId}
           priority={priority}
           phoneSearch={phoneSearch}
+          transferred={transferredFilter}
           allowAllEmployees={canViewAllEmployees}
           onOwnerChange={(value) => {
             setOwnerId(value);
@@ -501,6 +581,10 @@ function CrmPipelineContent() {
           }}
           onPriorityChange={(value) => {
             setPriority(value);
+            setStagePages(createInitialStagePages());
+          }}
+          onTransferredChange={(value) => {
+            setTransferredFilter(value);
             setStagePages(createInitialStagePages());
           }}
           onPhoneSearchChange={(value) => {
@@ -542,6 +626,10 @@ function CrmPipelineContent() {
                     onPreview={openLeadDetail}
                     onMoveStage={handleMoveStage}
                     onPageChange={handlePageChange}
+                    selectionEnabled={isAdmin}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleLeadSelection}
+                    onStageSelectChange={handleStageSelectChange}
                   />
                   {stage === CrmStage.NEW && (
                     <>
@@ -652,6 +740,10 @@ function CrmPipelineContent() {
                   onPreview={openLeadDetail}
                   onMoveStage={handleMoveStage}
                   onPageChange={handlePageChange}
+                  selectionEnabled={isAdmin}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleLeadSelection}
+                  onStageSelectChange={handleStageSelectChange}
                 />
               )}
 
@@ -719,6 +811,56 @@ function CrmPipelineContent() {
             </div>
           </div>
         )}
+
+        {isAdmin && selectedIds.size > 0 && (
+          <div
+            data-testid="pipeline-selection-bar"
+            className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-lg"
+          >
+            <span className="text-sm font-medium text-gray-900">{selectedIds.size} selected</span>
+            <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+            <Button size="sm" onClick={openTransferModal}>
+              Transfer
+            </Button>
+          </div>
+        )}
+
+        <Modal
+          isOpen={transferModalOpen}
+          onClose={() => setTransferModalOpen(false)}
+          title={`Transfer ${selectedIds.size} Numbers`}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Transfer {selectedIds.size} selected number{selectedIds.size === 1 ? '' : 's'} to
+              another employee. The numbers will change owner and be marked as transferred.
+            </p>
+            <Select
+              id="pipeline-transfer-target"
+              data-testid="pipeline-transfer-target"
+              aria-label="Transfer target employee"
+              options={transferTargetOptions}
+              value={transferTargetUserId}
+              placeholder="Select employee"
+              onChange={(event) => setTransferTargetUserId(event.target.value)}
+            />
+            {transferError && (
+              <p data-testid="pipeline-transfer-error" className="text-sm text-red-600">
+                {transferError}
+              </p>
+            )}
+            <Button
+              onClick={confirmTransfer}
+              loading={transferMutation.isPending}
+              disabled={!transferTargetUserId}
+              fullWidth
+            >
+              Transfer {selectedIds.size} numbers
+            </Button>
+          </div>
+        </Modal>
 
         <LeadDetailDrawer
           leadId={selectedLeadId}

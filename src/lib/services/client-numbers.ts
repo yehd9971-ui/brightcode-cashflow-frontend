@@ -11,6 +11,8 @@ import {
   NumberActivityLogDto,
   FollowUpDto,
   NumberDetailDto,
+  TransferNumbersDto,
+  TransferNumbersResponseDto,
 } from '@/types/api';
 
 export async function addNumber(data: AddNumberDto): Promise<ClientNumberDto> {
@@ -102,6 +104,11 @@ export async function rejectNi(numberId: string, reason?: string): Promise<Clien
 
 export async function getNumberDetail(numberId: string): Promise<NumberDetailDto> {
   const response = await api.get<NumberDetailDto>(`/client-numbers/${numberId}/detail`);
+  return response.data;
+}
+
+export async function transferNumbers(data: TransferNumbersDto): Promise<TransferNumbersResponseDto> {
+  const response = await api.post<TransferNumbersResponseDto>('/client-numbers/transfer', data);
   return response.data;
 }
 

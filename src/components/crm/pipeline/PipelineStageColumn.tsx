@@ -17,6 +17,10 @@ interface PipelineStageColumnProps {
   onPreview: (lead: CrmLeadResponseDto) => void;
   onMoveStage: (lead: CrmLeadResponseDto, stage: CrmStage) => void;
   onPageChange: (stage: CrmStage, page: number) => void;
+  selectionEnabled?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (leadId: string) => void;
+  onStageSelectChange?: (stage: CrmStage, leadIds: string[], checked: boolean) => void;
 }
 
 export function PipelineStageColumn({
@@ -31,6 +35,10 @@ export function PipelineStageColumn({
   onPreview,
   onMoveStage,
   onPageChange,
+  selectionEnabled = false,
+  selectedIds,
+  onToggleSelect,
+  onStageSelectChange,
 }: PipelineStageColumnProps) {
   const safeTotalPages = Math.max(1, totalPages);
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
@@ -48,6 +56,22 @@ export function PipelineStageColumn({
       )}
     >
       <div className="flex items-center justify-between border-b border-gray-200 px-3 py-3">
+        {selectionEnabled && (
+          <input
+            type="checkbox"
+            data-testid={`pipeline-stage-${stage}-select-all`}
+            checked={leads.length > 0 && leads.every((lead) => selectedIds?.has(lead.id))}
+            onChange={(event) =>
+              onStageSelectChange?.(
+                stage,
+                leads.map((lead) => lead.id),
+                event.target.checked,
+              )
+            }
+            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+            aria-label={`Select all leads in ${crmStageLabel(stage)}`}
+          />
+        )}
         <h2 className="text-sm font-semibold text-gray-900">{crmStageLabel(stage)}</h2>
         <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-gray-700">
           {count}
@@ -75,6 +99,9 @@ export function PipelineStageColumn({
               isUpdating={updatingLeadId === lead.id}
               onPreview={onPreview}
               onMoveStage={onMoveStage}
+              selectable={selectionEnabled}
+              selected={selectedIds?.has(lead.id)}
+              onToggleSelect={onToggleSelect}
             />
           ))
         )}

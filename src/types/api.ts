@@ -791,6 +791,8 @@ export interface CrmLeadResponseDto {
   leadStatus: LeadStatus;
   poolStatus: NumberPoolStatus;
   owner?: CrmUserSummaryDto;
+  transferredAt?: string;
+  transferredFrom?: { id: string; email: string };
   currentAssigneeId?: string;
   priority?: number;
   lastContactedAt?: string;
@@ -852,6 +854,7 @@ export interface CrmLeadsQueryDto {
   search?: string;
   stale?: boolean;
   staleDays?: number;
+  transferred?: boolean;
   nextAction?: 'overdue' | 'today' | 'upcoming' | 'none' | 'all';
   sortBy?: 'updatedAt' | 'createdAt' | 'lastContactedAt' | 'nextActionAt';
   sortOrder?: 'asc' | 'desc';
@@ -1045,6 +1048,8 @@ export interface ClientNumberDto {
   createdAt: string;
   updatedAt: string;
   leadStatusChangedAt?: string;
+  transferredAt?: string;
+  transferredFrom?: { id: string; email: string };
   currentAssignee?: { id: string; email: string };
   enteredBy?: { id: string; email: string };
   client?: { id: string; name: string };
@@ -1097,6 +1102,17 @@ export interface BulkImportResponseDto {
   successCount: number;
   errorCount: number;
   errors: string[];
+}
+
+export interface TransferNumbersDto {
+  numberIds: string[];
+  targetUserId: string;
+}
+
+export interface TransferNumbersResponseDto {
+  transferredCount: number;
+  skippedIds: string[];
+  targetUserId: string;
 }
 
 export interface UpdateLeadStatusDto {

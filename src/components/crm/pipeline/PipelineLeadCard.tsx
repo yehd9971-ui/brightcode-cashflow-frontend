@@ -13,6 +13,9 @@ interface PipelineLeadCardProps {
   isUpdating: boolean;
   onPreview: (lead: CrmLeadResponseDto) => void;
   onMoveStage: (lead: CrmLeadResponseDto, stage: CrmStage) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (leadId: string) => void;
 }
 
 function priorityLabel(priority?: number) {
@@ -51,6 +54,9 @@ export function PipelineLeadCard({
   isUpdating,
   onPreview,
   onMoveStage,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: PipelineLeadCardProps) {
   const displayStage = visibleStage(lead.stage);
   const stale = isStale(lead.lastContactedAt);
@@ -65,10 +71,21 @@ export function PipelineLeadCard({
       className={cn(
         'rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors hover:border-blue-300',
         lastCallNoAnswer && 'border-red-300 bg-red-50/50 hover:border-red-400',
+        lead.transferredAt && !lastCallNoAnswer && 'border-l-4 border-l-purple-400',
         isUpdating && 'opacity-70'
       )}
     >
       <div className="flex items-start justify-between gap-2">
+        {selectable && (
+          <input
+            type="checkbox"
+            data-testid="pipeline-lead-select"
+            checked={selected}
+            onChange={() => onToggleSelect?.(lead.id)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+            aria-label={`Select ${lead.phoneNumber}`}
+          />
+        )}
         <div className="min-w-0">
           <button
             type="button"
@@ -91,6 +108,11 @@ export function PipelineLeadCard({
         {displayStage === CrmStage.HOT_LEAD && (
           <Badge variant="warning" size="sm">
             <Flame className="mr-1 h-3 w-3" /> Hot Lead
+          </Badge>
+        )}
+        {lead.transferredAt && (
+          <Badge variant="purple" size="sm">
+            Transferred
           </Badge>
         )}
         {lastCallNoAnswer && (

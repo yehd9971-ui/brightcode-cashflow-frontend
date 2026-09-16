@@ -11,10 +11,12 @@ interface PipelineFiltersProps {
   ownerId: string;
   priority: string;
   phoneSearch: string;
+  transferred: string;
   allowAllEmployees?: boolean;
   onOwnerChange: (value: string) => void;
   onPriorityChange: (value: string) => void;
   onPhoneSearchChange: (value: string) => void;
+  onTransferredChange: (value: string) => void;
 }
 
 const priorityOptions = [
@@ -23,6 +25,12 @@ const priorityOptions = [
   { value: '2', label: 'Normal' },
   { value: '3', label: 'High' },
   { value: '4', label: 'Urgent' },
+];
+
+const transferredOptions = [
+  { value: '', label: 'All' },
+  { value: 'true', label: 'Transferred' },
+  { value: 'false', label: 'Not transferred' },
 ];
 
 export function PipelineFilters({
@@ -35,6 +43,8 @@ export function PipelineFilters({
   onOwnerChange,
   onPriorityChange,
   onPhoneSearchChange,
+  transferred,
+  onTransferredChange,
 }: PipelineFiltersProps) {
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
   const phoneSearchError =
@@ -64,7 +74,7 @@ export function PipelineFilters({
         <Filter className="h-4 w-4" />
         Filters
       </div>
-      <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_1fr_1.2fr]">
+      <div className="grid flex-1 gap-3 lg:grid-cols-[1fr_1fr_1fr_1.2fr]">
         <Select
           id="pipeline-employee-filter"
           data-testid="pipeline-employee-filter"
@@ -82,6 +92,15 @@ export function PipelineFilters({
           value={priority}
           className="min-h-11 text-base sm:min-h-0 sm:text-sm"
           onChange={(event) => onPriorityChange(event.target.value)}
+        />
+        <Select
+          id="pipeline-transferred-filter"
+          data-testid="pipeline-transferred-filter"
+          aria-label="Transferred filter"
+          options={transferredOptions}
+          value={transferred}
+          className="min-h-11 text-base sm:min-h-0 sm:text-sm"
+          onChange={(event) => onTransferredChange(event.target.value)}
         />
         <Input
           id="pipeline-phone-search"

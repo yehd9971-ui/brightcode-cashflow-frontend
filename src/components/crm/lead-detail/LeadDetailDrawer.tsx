@@ -450,6 +450,14 @@ export function LeadDetailDrawer({
                         <p className="text-gray-500">Owner</p>
                         <p className="truncate font-medium text-gray-900">{lead.owner?.email || 'Unassigned'}</p>
                       </div>
+                      {lead.transferredAt && (
+                        <div>
+                          <p className="text-gray-500">Transferred from</p>
+                          <p className="truncate font-medium text-gray-900">
+                            {lead.transferredFrom?.email || 'Unknown'} on {formatDate(lead.transferredAt)}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-500">Source</p>
                         <p className="truncate font-medium text-gray-900">{lead.source || 'Unknown'}</p>
