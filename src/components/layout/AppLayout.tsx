@@ -3,6 +3,7 @@
 import { useState, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { ActiveCallBanner } from '@/components/calls/ActiveCallBanner';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { FullPageLoading } from '@/components/ui/Loading';
@@ -44,6 +45,8 @@ export function AppLayout({ children, pendingTransactionCount, pendingCallCount 
           onMenuClick={() => setSidebarOpen(true)}
           onLogout={logout}
         />
+
+        <ActiveCallBanner />
 
         <main className="px-4 pt-2 pb-4 md:px-6 md:pt-4 md:pb-6">{children}</main>
       </div>

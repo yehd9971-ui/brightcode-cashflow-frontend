@@ -51,7 +51,11 @@ export async function startCall(phone?: string): Promise<{ status: string; callS
   return response.data;
 }
 
-export async function getMyCallStatus(): Promise<{ currentStatus: string | null; currentCallPhone: string | null }> {
+export async function getMyCallStatus(): Promise<{
+  currentStatus: string | null;
+  currentCallPhone: string | null;
+  callStartedAt: string | null;
+}> {
   const response = await api.get('/users/my-call-status');
   return response.data;
 }

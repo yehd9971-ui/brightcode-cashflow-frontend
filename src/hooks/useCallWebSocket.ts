@@ -63,12 +63,14 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
       queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'pending-count'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'phone-check'] });
+      queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
     });
 
     socket.on('call:updated', () => {
       queryClient.invalidateQueries({ queryKey: ['calls', 'my-daily-stats'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'needs-retry'] });
       queryClient.invalidateQueries({ queryKey: ['calls', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
     });
 
     socket.on('call:approved', () => {

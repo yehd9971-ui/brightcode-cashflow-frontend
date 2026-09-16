@@ -28,6 +28,7 @@ import { addNumber, transferNumbers } from '@/lib/services/client-numbers';
 import { closeCrmTask, completeCrmTask, getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
+import { loadPipelineViewState, savePipelineViewState } from './pipeline-view-state';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneNumber } from '@/utils/phone';
 import {
@@ -150,11 +151,36 @@ function CrmPipelineContent() {
   useEffect(() => {
     if (ownerFilterInitialized || !user) return;
 
-    if (user.role === Role.ADMIN || user.role === Role.SALES_MANAGER || user.role === Role.SALES) {
+    const saved = loadPipelineViewState(user.id);
+    if (saved) {
+      // Restore the previous view (page position, employee filter, filters)
+      // after navigating away to the call form and back.
+      const canRestoreOwner = user.role !== Role.SALES || saved.ownerId === user.id;
+      setOwnerId(canRestoreOwner && saved.ownerId ? saved.ownerId : user.id);
+      setPriority(saved.priority || '');
+      setTransferredFilter(saved.transferredFilter || '');
+      setPhoneSearch(saved.phoneSearch || '');
+      if (saved.stagePages) setStagePages(saved.stagePages);
+    } else if (
+      user.role === Role.ADMIN ||
+      user.role === Role.SALES_MANAGER ||
+      user.role === Role.SALES
+    ) {
       setOwnerId(user.id);
     }
     setOwnerFilterInitialized(true);
   }, [ownerFilterInitialized, user]);
+
+  useEffect(() => {
+    if (!ownerFilterInitialized) return;
+    savePipelineViewState(user?.id, {
+      ownerId,
+      stagePages,
+      priority,
+      transferredFilter,
+      phoneSearch,
+    });
+  }, [ownerFilterInitialized, user?.id, ownerId, stagePages, priority, transferredFilter, phoneSearch]);
 
   const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
     ownerId: operationalUserId,
