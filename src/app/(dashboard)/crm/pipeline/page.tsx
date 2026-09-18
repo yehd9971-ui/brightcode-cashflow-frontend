@@ -217,6 +217,8 @@ function CrmPipelineContent() {
         includeLegacyInterested: stage === CrmStage.HOT_LEAD ? true : undefined,
         page: stagePages[stage] ?? 1,
         limit: PIPELINE_LIMIT,
+        // NO ANSWER is a call queue: oldest no-answer first, so a just-called card moves to the back
+        ...(stage === CrmStage.NOT_ANSWERED ? { sortBy: 'lastNoAnswerAt', sortOrder: 'asc' } as const : {}),
       };
 
       return {
