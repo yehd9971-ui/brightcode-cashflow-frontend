@@ -856,7 +856,7 @@ export interface CrmLeadsQueryDto {
   staleDays?: number;
   transferred?: boolean;
   nextAction?: 'overdue' | 'today' | 'upcoming' | 'none' | 'all';
-  sortBy?: 'updatedAt' | 'createdAt' | 'lastContactedAt' | 'nextActionAt';
+  sortBy?: 'updatedAt' | 'createdAt' | 'lastContactedAt' | 'nextActionAt' | 'lastNoAnswerAt';
   sortOrder?: 'asc' | 'desc';
 }
 

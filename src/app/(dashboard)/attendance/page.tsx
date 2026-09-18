@@ -42,7 +42,8 @@ function formatDuration(clockInStr: string): string {
 }
 
 export default function AttendancePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSalesManager } = useAuth();
+  const canViewEmployee = isAdmin || isSalesManager;
   const today = new Date();
   const [dateRange, setDateRange] = useState({
     startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
@@ -60,8 +61,9 @@ export default function AttendancePage() {
   });
 
   const allUsers = usersData?.data || [];
+  // Backend only allows viewing self + SALES users; selecting another manager would 403
   const employeeUsers = allUsers.filter(
-    (u: UserResponseDto) => u.role === Role.SALES || u.role === Role.SALES_MANAGER,
+    (u: UserResponseDto) => u.role === Role.SALES,
   );
 
   const employeeOptions = [
@@ -352,7 +354,7 @@ export default function AttendancePage() {
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        {isAdmin && (
+                        {canViewEmployee && (
                           <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">Employee</th>
                         )}
                         <th className="text-start text-sm font-medium text-gray-500 px-4 py-3">Date</th>
@@ -365,7 +367,7 @@ export default function AttendancePage() {
                     <tbody className="divide-y divide-gray-100">
                       {sessions.map((session) => (
                         <tr key={session.id} className="hover:bg-gray-50">
-                          {isAdmin && (
+                          {canViewEmployee && (
                             <td className="px-4 py-3 text-sm text-gray-900">{session.userEmail}</td>
                           )}
                           <td className="px-4 py-3 text-sm text-gray-900">
