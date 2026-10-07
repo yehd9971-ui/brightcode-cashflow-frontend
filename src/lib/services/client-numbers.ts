@@ -13,6 +13,9 @@ import {
   NumberDetailDto,
   TransferNumbersDto,
   TransferNumbersResponseDto,
+  RestoreNiNumbersDto,
+  RestoreNiNumbersResponseDto,
+  NiArchivedNumberDto,
 } from '@/types/api';
 
 export async function addNumber(data: AddNumberDto): Promise<ClientNumberDto> {
@@ -99,6 +102,22 @@ export async function approveNi(numberId: string): Promise<ClientNumberDto> {
 
 export async function rejectNi(numberId: string, reason?: string): Promise<ClientNumberDto> {
   const response = await api.post<ClientNumberDto>(`/client-numbers/ni-reject/${numberId}`, { reason });
+  return response.data;
+}
+
+export async function getNiArchived(
+  page = 1,
+  limit = 20
+): Promise<{ data: NiArchivedNumberDto[]; total: number; page: number; limit: number }> {
+  const response = await api.get<{ data: NiArchivedNumberDto[]; total: number; page: number; limit: number }>(
+    '/client-numbers/ni-archived',
+    { params: { page, limit } }
+  );
+  return response.data;
+}
+
+export async function restoreNiNumbers(data: RestoreNiNumbersDto): Promise<RestoreNiNumbersResponseDto> {
+  const response = await api.post<RestoreNiNumbersResponseDto>('/client-numbers/ni-restore', data);
   return response.data;
 }
 

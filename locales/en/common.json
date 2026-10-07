@@ -108,6 +108,27 @@
     "title": "Audit Logs",
     "noLogs": "No audit logs found"
   },
+  "crm": {
+    "transfer": {
+      "title": "Transfer Numbers",
+      "targetEmployee": "Target employee",
+      "selectEmployee": "Select employee",
+      "targetList": "Target list",
+      "keepCurrentStatus": "Keep current status",
+      "success": "Numbers transferred"
+    },
+    "niRestore": {
+      "archived": "Archived",
+      "restoreAssign": "Restore & Assign",
+      "targetEmployee": "Target employee",
+      "targetStage": "Target stage",
+      "selectEmployee": "Select employee",
+      "selectStage": "Select stage",
+      "noArchived": "No archived numbers",
+      "markedBy": "Marked by",
+      "success": "Numbers restored"
+    }
+  },
   "validation": {
     "required": "This field is required",
     "invalidEmail": "Please enter a valid email",

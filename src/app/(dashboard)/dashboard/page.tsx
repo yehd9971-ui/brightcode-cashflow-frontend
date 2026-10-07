@@ -6,26 +6,21 @@ import { FileText, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getDashboardStats, generateEndOfDayReport } from '@/lib/services/calls';
-import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/Loading';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { useCallWebSocket } from '@/hooks/useCallWebSocket';
 import { cn } from '@/utils/cn';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { Role } from '@/types/api';
 
 export default function CallDashboardPage() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
-
-  useCallWebSocket({ userId: user?.id, joinDashboard: true, enabled: !!user });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['calls', 'dashboard-stats', date],

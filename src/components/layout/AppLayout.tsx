@@ -3,10 +3,12 @@
 import { useState, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useCallWebSocket } from '@/hooks/useCallWebSocket';
 import { ActiveCallBanner } from '@/components/calls/ActiveCallBanner';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { FullPageLoading } from '@/components/ui/Loading';
+import { Role } from '@/types/api';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -20,6 +22,13 @@ export function AppLayout({ children, pendingTransactionCount, pendingCallCount 
 
   // Track online/offline status with notifications
   useOnlineStatus();
+
+  // Live call events for every authenticated user (incl. reps)
+  useCallWebSocket({
+    userId: user?.id,
+    joinDashboard: user?.role === Role.ADMIN || user?.role === Role.SALES_MANAGER,
+    enabled: !!user,
+  });
 
   if (isLoading) {
     return <FullPageLoading text="Loading..." />;

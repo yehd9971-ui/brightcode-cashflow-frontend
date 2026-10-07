@@ -108,6 +108,27 @@
     "title": "سجلات التدقيق",
     "noLogs": "لا توجد سجلات"
   },
+  "crm": {
+    "transfer": {
+      "title": "تحويل الأرقام",
+      "targetEmployee": "الموظف الهدف",
+      "selectEmployee": "اختر موظفًا",
+      "targetList": "القائمة الهدف",
+      "keepCurrentStatus": "الاحتفاظ بالحالة الحالية",
+      "success": "تم تحويل الأرقام"
+    },
+    "niRestore": {
+      "archived": "المؤرشفة",
+      "restoreAssign": "استرجاع وإسناد",
+      "targetEmployee": "الموظف الهدف",
+      "targetStage": "المرحلة الهدف",
+      "selectEmployee": "اختر موظفًا",
+      "selectStage": "اختر المرحلة",
+      "noArchived": "لا توجد أرقام مؤرشفة",
+      "markedBy": "تم التحديد بواسطة",
+      "success": "تم استرجاع الأرقام"
+    }
+  },
   "validation": {
     "required": "هذا الحقل مطلوب",
     "invalidEmail": "أدخل بريد إلكتروني صالح",

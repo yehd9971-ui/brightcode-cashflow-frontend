@@ -27,7 +27,7 @@ import { ensureClientNumberForCall, getNeedsRetry } from '@/lib/services/calls';
 import { addNumber, transferNumbers } from '@/lib/services/client-numbers';
 import { closeCrmTask, completeCrmTask, getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
-import { CRM_PIPELINE_STAGES, crmStageLabel } from '@/lib/crm-stages';
+import { CRM_PIPELINE_STAGES, CRM_TRANSFERABLE_STAGE_OPTIONS, crmStageLabel } from '@/lib/crm-stages';
 import { loadPipelineViewState, savePipelineViewState } from './pipeline-view-state';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneNumber } from '@/utils/phone';
@@ -128,6 +128,7 @@ function CrmPipelineContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferTargetUserId, setTransferTargetUserId] = useState('');
+  const [transferTargetStage, setTransferTargetStage] = useState('');
   const [transferError, setTransferError] = useState<string | null>(null);
   const [stagePages, setStagePages] = useState(createInitialStagePages);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | undefined>();
@@ -138,6 +139,8 @@ function CrmPipelineContent() {
   const [taskToClose, setTaskToClose] = useState<OpenTaskResponseDto | null>(null);
   const [closeReason, setCloseReason] = useState('');
   const [activeMobileTab, setActiveMobileTab] = useState<string>(CrmStage.NEW);
+  // Ticking clock so retry countdowns re-render and re-enable without refresh
+  const [now, setNow] = useState(() => Date.now());
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
@@ -181,6 +184,11 @@ function CrmPipelineContent() {
       phoneSearch,
     });
   }, [ownerFilterInitialized, user?.id, ownerId, stagePages, priority, transferredFilter, phoneSearch]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const baseLeadsQuery: Omit<CrmLeadsQueryDto, 'page' | 'limit' | 'stage'> = useMemo(() => ({
     ownerId: operationalUserId,
@@ -287,13 +295,16 @@ function CrmPipelineContent() {
   const retryWaitMap = useMemo(() => {
     const map = new Map<string, string>();
     retryCalls.forEach((call) => {
-      const minutesLeft = 30 - Math.floor((Date.now() - new Date(call.createdAt).getTime()) / 60000);
+      const availableAt = call.retryAvailableAt
+        ? new Date(call.retryAvailableAt).getTime()
+        : new Date(call.createdAt).getTime() + 30 * 60000;
+      const minutesLeft = Math.ceil((availableAt - now) / 60000);
       if (minutesLeft > 0) {
         map.set(call.id, `Retry in ${formatWait(minutesLeft)}`);
       }
     });
     return map;
-  }, [retryCalls]);
+  }, [retryCalls, now]);
   const mobileTabs = [
     ...PIPELINE_STAGES.map((stage) => ({
       id: stage,
@@ -358,6 +369,7 @@ function CrmPipelineContent() {
       setSelectedIds(new Set());
       setTransferModalOpen(false);
       setTransferTargetUserId('');
+      setTransferTargetStage('');
       setTransferError(null);
       toast.success(
         result.skippedIds.length > 0
@@ -372,6 +384,7 @@ function CrmPipelineContent() {
 
   const openTransferModal = () => {
     setTransferTargetUserId('');
+    setTransferTargetStage('');
     setTransferError(null);
     setTransferModalOpen(true);
   };
@@ -385,6 +398,7 @@ function CrmPipelineContent() {
     transferMutation.mutate({
       numberIds: Array.from(selectedIds),
       targetUserId: transferTargetUserId,
+      ...(transferTargetStage ? { targetStage: transferTargetStage as CrmStage } : {}),
     });
   };
 
@@ -395,6 +409,11 @@ function CrmPipelineContent() {
         salesUser.isActive
     )
     .map((salesUser) => ({ value: salesUser.id, label: salesUser.email }));
+
+  const transferStageOptions = [
+    { value: '', label: 'Keep current status / الاحتفاظ بالحالة الحالية' },
+    ...CRM_TRANSFERABLE_STAGE_OPTIONS,
+  ];
 
   const moveStageMutation = useMutation({
     mutationFn: ({ lead, stage }: { lead: CrmLeadResponseDto; stage: CrmStage }) =>
@@ -873,6 +892,15 @@ function CrmPipelineContent() {
               value={transferTargetUserId}
               placeholder="Select employee"
               onChange={(event) => setTransferTargetUserId(event.target.value)}
+            />
+            <Select
+              id="pipeline-transfer-stage"
+              data-testid="pipeline-transfer-stage"
+              aria-label="Target list"
+              label="Target list / القائمة الهدف"
+              options={transferStageOptions}
+              value={transferTargetStage}
+              onChange={(event) => setTransferTargetStage(event.target.value)}
             />
             {transferError && (
               <p data-testid="pipeline-transfer-error" className="text-sm text-red-600">

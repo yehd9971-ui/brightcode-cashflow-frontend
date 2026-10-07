@@ -62,6 +62,17 @@ export default function LogCallPage() {
   const isSecondAttempt = isPhoneCheckError || (phoneCalls?.data?.length ?? 0) >= 1;
   const phoneCheckPending = callStatus === CallStatus.NOT_ANSWERED && normalizedPhone.length >= 7 && isPhoneCheckLoading;
 
+  // Re-call lock: a NOT_ANSWERED within the last 30 minutes blocks any new call to this number
+  const [now] = useState(() => Date.now());
+  const latestNotAnsweredAt = useMemo(() => {
+    return (phoneCalls?.data ?? []).reduce((latest, call) => {
+      const time = new Date(call.createdAt).getTime();
+      return time > latest ? time : latest;
+    }, 0);
+  }, [phoneCalls?.data]);
+  const recallLockMinutesLeft = Math.ceil((latestNotAnsweredAt + 30 * 60000 - now) / 60000);
+  const isRecallLocked = normalizedPhone.length >= 7 && recallLockMinutesLeft > 0;
+
   const createMutation = useMutation({
     mutationFn: () => createCall(
       {
@@ -88,6 +99,7 @@ export default function LogCallPage() {
       queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
       queryClient.invalidateQueries({ queryKey: ['my-call-status'] });
       queryClient.invalidateQueries({ queryKey: ['pending-completions'] });
+      queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
 
       // Show follow-up prompt for answered calls, then redirect
       if (callStatus === CallStatus.ANSWERED) {
@@ -179,7 +191,7 @@ export default function LogCallPage() {
   // Screenshot required for: Answered calls (always) and second Not Answered attempt
   // First Not Answered: no screenshot, hidden entirely
   const screenshotRequired = callStatus === CallStatus.ANSWERED || (callStatus === CallStatus.NOT_ANSWERED && isSecondAttempt);
-  const canSubmit = !phoneCheckPending && phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && (screenshotRequired ? !!screenshot : true);
+  const canSubmit = !isRecallLocked && !phoneCheckPending && phone.trim() && (callStatus !== CallStatus.ANSWERED || (duration && parseInt(duration) > 0 && notes.trim() !== '')) && (screenshotRequired ? !!screenshot : true);
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -312,6 +324,12 @@ export default function LogCallPage() {
               className="hidden"
             />
           </div>
+          )}
+
+          {isRecallLocked && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              This number was not answered recently. You can call again in {recallLockMinutesLeft} minute{recallLockMinutesLeft === 1 ? '' : 's'}.
+            </p>
           )}
 
           <Button type="submit" className="w-full" loading={createMutation.isPending} disabled={!canSubmit}>
