@@ -20,3 +20,13 @@ export const CRM_STAGE_OPTIONS = CRM_PIPELINE_STAGES.map((stage) => ({
   value: stage,
   label: crmStageLabel(stage),
 }));
+
+// Stages an ADMIN may pick in transfer / NI-restore flows (NOT_INTERESTED excluded)
+export const CRM_TRANSFERABLE_STAGES: CrmStage[] = CRM_PIPELINE_STAGES.filter(
+  (stage) => stage !== CrmStage.NOT_INTERESTED
+);
+
+export const CRM_TRANSFERABLE_STAGE_OPTIONS = CRM_TRANSFERABLE_STAGES.map((stage) => ({
+  value: stage,
+  label: crmStageLabel(stage),
+}));

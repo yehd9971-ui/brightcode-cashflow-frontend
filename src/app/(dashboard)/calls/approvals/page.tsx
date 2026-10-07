@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, XCircle, AlertTriangle, CheckCheck, ThumbsDown } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, CheckCheck, ThumbsDown, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCallApprovals, approveCall, rejectCall, bulkApproveCalls, getNeedsRetry, getCalls } from '@/lib/services/calls';
-import { getNiPending, approveNi, rejectNi } from '@/lib/services/client-numbers';
+import { getNiPending, approveNi, rejectNi, getNiArchived, restoreNiNumbers } from '@/lib/services/client-numbers';
 import { getSalesUsers } from '@/lib/services/users';
-import { CallResponseDto, CallApprovalStatus, Role } from '@/types/api';
+import { CallResponseDto, CallApprovalStatus, CrmStage, RestoreNiNumbersDto, Role } from '@/types/api';
+import { CRM_TRANSFERABLE_STAGE_OPTIONS } from '@/lib/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -76,6 +77,98 @@ export default function CallApprovalsPage() {
     refetchInterval: 15000,
   });
   const niPending = niPendingData || [];
+
+  // NI archived + restore (ADMIN only)
+  const [niView, setNiView] = useState<'pending' | 'archived'>('pending');
+  const [niArchivedPage, setNiArchivedPage] = useState(1);
+  const [niSelectedIds, setNiSelectedIds] = useState<Set<string>>(new Set());
+  const [showNiRestoreModal, setShowNiRestoreModal] = useState(false);
+  const [niRestoreTargetUserId, setNiRestoreTargetUserId] = useState('');
+  const [niRestoreTargetStage, setNiRestoreTargetStage] = useState('');
+  const [niRestoreError, setNiRestoreError] = useState<string | null>(null);
+
+  const { data: niArchivedData, isLoading: niArchivedLoading, isFetching: niArchivedFetching } = useQuery({
+    queryKey: ['ni-archived', { page: niArchivedPage, limit }],
+    queryFn: () => getNiArchived(niArchivedPage, limit),
+    enabled: isAdmin,
+  });
+  const niArchived = niArchivedData?.data || [];
+  const niArchivedTotalPages = Math.ceil((niArchivedData?.total || 0) / limit);
+
+  const niRestoreTargetOptions = useMemo(
+    () =>
+      (usersData ?? [])
+        .filter((u) => (u.role === Role.SALES || u.role === Role.SALES_MANAGER) && u.isActive)
+        .map((u) => ({ value: u.id, label: u.email })),
+    [usersData]
+  );
+
+  const niRestoreMutation = useMutation({
+    mutationFn: (dto: RestoreNiNumbersDto) => restoreNiNumbers(dto),
+    onSuccess: (result) => {
+      toast.success(
+        result.skippedIds.length > 0
+          ? `Restored ${result.restoredCount} numbers (${result.skippedIds.length} skipped)`
+          : `Restored ${result.restoredCount} numbers`
+      );
+      queryClient.invalidateQueries({ queryKey: ['ni-pending'] });
+      queryClient.invalidateQueries({ queryKey: ['ni-archived'] });
+      queryClient.invalidateQueries({ queryKey: ['my-numbers'] });
+      queryClient.invalidateQueries({ queryKey: ['pool'] });
+      setNiSelectedIds(new Set());
+      setShowNiRestoreModal(false);
+      setNiRestoreTargetUserId('');
+      setNiRestoreTargetStage('');
+      setNiRestoreError(null);
+    },
+    onError: (err) =>
+      setNiRestoreError(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Failed to restore numbers'
+      ),
+  });
+
+  function toggleNiSelect(id: string) {
+    setNiSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleNiSelectAll() {
+    const list: { id: string }[] = niView === 'pending' ? niPending : niArchived;
+    if (niSelectedIds.size === list.length) {
+      setNiSelectedIds(new Set());
+    } else {
+      setNiSelectedIds(new Set(list.map((n) => n.id)));
+    }
+  }
+
+  function openNiRestoreModal() {
+    setNiRestoreTargetUserId('');
+    setNiRestoreTargetStage('');
+    setNiRestoreError(null);
+    setShowNiRestoreModal(true);
+  }
+
+  function confirmNiRestore() {
+    if (!niRestoreTargetUserId) {
+      setNiRestoreError('Select a target employee');
+      return;
+    }
+    if (!niRestoreTargetStage) {
+      setNiRestoreError('Select a target stage');
+      return;
+    }
+    setNiRestoreError(null);
+    niRestoreMutation.mutate({
+      numberIds: Array.from(niSelectedIds),
+      targetUserId: niRestoreTargetUserId,
+      targetStage: niRestoreTargetStage as CrmStage,
+    });
+  }
 
   // History tab state
   const [historyPage, setHistoryPage] = useState(1);
@@ -322,6 +415,94 @@ export default function CallApprovalsPage() {
             )}
           </>
         ) : activeTab === 'ni' ? (
+          <>
+            {/* Pending / Archived sub-toggle (Archived is ADMIN only) */}
+            {isAdmin && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setNiView('pending'); setNiSelectedIds(new Set()); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                    niView === 'pending' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Pending ({niPending.length})
+                </button>
+                <button
+                  onClick={() => { setNiView('archived'); setNiSelectedIds(new Set()); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                    niView === 'archived' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Archived / المؤرشفة ({niArchivedData?.total ?? 0})
+                </button>
+              </div>
+            )}
+
+            {/* Select-all + Restore & Assign (ADMIN only) */}
+            {isAdmin && (niView === 'pending' ? niPending.length > 0 : niArchived.length > 0) && (
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={
+                      niSelectedIds.size > 0 &&
+                      niSelectedIds.size === (niView === 'pending' ? niPending.length : niArchived.length)
+                    }
+                    onChange={toggleNiSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-600">
+                    {niSelectedIds.size > 0 ? `${niSelectedIds.size} selected` : 'Select All'}
+                  </span>
+                </div>
+                <Button size="sm" disabled={niSelectedIds.size === 0} onClick={openNiRestoreModal}>
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  Restore & Assign / استرجاع وإسناد ({niSelectedIds.size})
+                </Button>
+              </div>
+            )}
+
+            {niView === 'archived' && isAdmin ? (
+              <Card>
+                {niArchivedLoading ? (
+                  <div className="space-y-3 p-4">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>
+                ) : niArchived.length === 0 ? (
+                  <EmptyState title="No archived numbers" description="No approved Not Interested numbers are archived." />
+                ) : (
+                  <>
+                    <div className="divide-y divide-gray-100">
+                      {niArchived.map((num) => (
+                        <div key={num.id} className="p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={niSelectedIds.has(num.id)}
+                              onChange={() => toggleNiSelect(num.id)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                            />
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg font-semibold text-gray-900">{num.phoneNumber}</span>
+                                <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-700">Archived NI</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                                <span>Marked by {num.notInterestedBy?.email || 'unknown'}</span>
+                                {num.notInterestedAt && <span>NI date: {formatDateShort(num.notInterestedAt)}</span>}
+                                {num.niApprovedAt && <span>Archived: {formatDateShort(num.niApprovedAt)}</span>}
+                              </div>
+                              {num.clientName && <p className="text-sm text-gray-600">Client: {num.clientName}</p>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-4">
+                      <Pagination currentPage={niArchivedPage} totalPages={niArchivedTotalPages} onPageChange={setNiArchivedPage} loading={niArchivedFetching} total={niArchivedData?.total || 0} limit={limit} />
+                    </div>
+                  </>
+                )}
+              </Card>
+            ) : (
           <Card>
             {niPending.length === 0 ? (
               <EmptyState title="No pending requests" description="No Not Interested requests to review." />
@@ -332,6 +513,16 @@ export default function CallApprovalsPage() {
                   return (
                     <Card key={num.id} className="p-4 hover:shadow-md transition-shadow">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        {isAdmin && (
+                          <div className="flex items-start pt-1 shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={niSelectedIds.has(num.id)}
+                              onChange={() => toggleNiSelect(num.id)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-3">
                             <span className="text-lg font-semibold text-gray-900">{num.phoneNumber}</span>
@@ -375,6 +566,8 @@ export default function CallApprovalsPage() {
               </div>
             )}
           </Card>
+            )}
+          </>
         ) : activeTab === 'retry' ? (
           <Card>
             {retryCalls.length === 0 ? (
@@ -632,6 +825,53 @@ export default function CallApprovalsPage() {
             </div>
           </Modal>
         )}
+        {/* NI Restore & Assign Modal */}
+        <Modal
+          isOpen={showNiRestoreModal}
+          onClose={() => setShowNiRestoreModal(false)}
+          title={`Restore & Assign ${niSelectedIds.size} Numbers`}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Restore {niSelectedIds.size} Not Interested number{niSelectedIds.size === 1 ? '' : 's'} and
+              assign {niSelectedIds.size === 1 ? 'it' : 'them'} to an employee with a new pipeline stage.
+            </p>
+            <Select
+              id="ni-restore-target"
+              data-testid="ni-restore-target"
+              aria-label="Restore target employee"
+              label="Target employee / الموظف الهدف"
+              options={niRestoreTargetOptions}
+              value={niRestoreTargetUserId}
+              placeholder="Select employee"
+              onChange={(e) => setNiRestoreTargetUserId(e.target.value)}
+            />
+            <Select
+              id="ni-restore-stage"
+              data-testid="ni-restore-stage"
+              aria-label="Target stage"
+              label="Target stage / المرحلة الهدف"
+              options={CRM_TRANSFERABLE_STAGE_OPTIONS}
+              value={niRestoreTargetStage}
+              placeholder="Select stage"
+              onChange={(e) => setNiRestoreTargetStage(e.target.value)}
+              required
+            />
+            {niRestoreError && (
+              <p data-testid="ni-restore-error" className="text-sm text-red-600">
+                {niRestoreError}
+              </p>
+            )}
+            <Button
+              onClick={confirmNiRestore}
+              loading={niRestoreMutation.isPending}
+              disabled={!niRestoreTargetUserId || !niRestoreTargetStage}
+              fullWidth
+            >
+              Restore & Assign / استرجاع وإسناد
+            </Button>
+          </div>
+        </Modal>
       </div>
     </ProtectedRoute>
   );

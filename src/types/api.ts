@@ -624,6 +624,7 @@ export interface CallResponseDto {
   lateReportPenalty?: number;
   lateReportDelayMinutes?: number;
   lateReportPenaltyMinutes?: number;
+  retryAvailableAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1107,12 +1108,33 @@ export interface BulkImportResponseDto {
 export interface TransferNumbersDto {
   numberIds: string[];
   targetUserId: string;
+  targetStage?: CrmStage;
 }
 
 export interface TransferNumbersResponseDto {
   transferredCount: number;
   skippedIds: string[];
   targetUserId: string;
+}
+
+export interface RestoreNiNumbersDto {
+  numberIds: string[];
+  targetUserId: string;
+  targetStage: CrmStage;
+}
+
+export interface RestoreNiNumbersResponseDto {
+  restoredCount: number;
+  skippedIds: string[];
+  targetUserId: string;
+}
+
+export interface NiArchivedNumberDto extends ClientNumberDto {
+  notInterestedStatus?: string;
+  notInterestedByUserId?: string;
+  notInterestedAt?: string;
+  niApprovedAt?: string;
+  notInterestedBy?: { id: string; email: string } | null;
 }
 
 export interface UpdateLeadStatusDto {
