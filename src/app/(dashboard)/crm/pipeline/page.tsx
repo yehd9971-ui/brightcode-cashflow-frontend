@@ -24,7 +24,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { ensureClientNumberForTask, getOpenTasks } from '@/lib/services/call-tasks';
 import { ensureClientNumberForCall, getNeedsRetry } from '@/lib/services/calls';
-import { addNumber, transferNumbers } from '@/lib/services/client-numbers';
+import { addNumber, claimNumber, searchNumbers, transferNumbers } from '@/lib/services/client-numbers';
 import { closeCrmTask, completeCrmTask, getCrmLeads, updateCrmLeadStage } from '@/lib/services/crm';
 import { getMyCallStatus, getSalesUsers, startCall } from '@/lib/services/users';
 import { CRM_PIPELINE_STAGES, CRM_TRANSFERABLE_STAGE_OPTIONS, crmStageLabel } from '@/lib/crm-stages';
@@ -34,11 +34,13 @@ import { normalizePhoneNumber } from '@/utils/phone';
 import {
   AddNumberDto,
   CallResponseDto,
+  ClientNumberDto,
   CrmLeadResponseDto,
   CrmLeadsQueryDto,
   CrmLeadsResponseDto,
   CrmStage,
   ErrorResponse,
+  NumberPoolStatus,
   OpenTaskBucket,
   OpenTaskResponseDto,
   Role,
@@ -266,6 +268,17 @@ function CrmPipelineContent() {
     enabled: pipelineQueriesEnabled,
   });
 
+  const numberSearchActive = phoneSearchDigits.length >= 5;
+  const { data: numberSearchResults, isLoading: numberSearchLoading } = useQuery({
+    queryKey: ['number-search', phoneSearch.trim()],
+    queryFn: () => searchNumbers(phoneSearch.trim()),
+    enabled: numberSearchActive,
+  });
+  const filteredNumberSearchResults = useMemo(
+    () => (numberSearchResults ?? []).filter((num) => num.currentAssigneeId !== user?.id),
+    [numberSearchResults, user?.id],
+  );
+
   const stageData = useMemo(() => {
     return PIPELINE_STAGES.reduce((acc, stage, index) => {
       acc[stage] = stageQueries[index].data;
@@ -379,6 +392,20 @@ function CrmPipelineContent() {
     },
     onError: (error) => {
       setTransferError(apiErrorMessage(error, 'Failed to transfer numbers'));
+    },
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: (id: string) => claimNumber(id),
+    onSuccess: () => {
+      invalidatePipelineData();
+      queryClient.invalidateQueries({ queryKey: ['number-search'] });
+      queryClient.invalidateQueries({ queryKey: ['pool'] });
+      toast.success('Number assigned to you');
+    },
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, 'Failed to claim number'));
+      queryClient.invalidateQueries({ queryKey: ['number-search'] });
     },
   });
 
@@ -639,6 +666,58 @@ function CrmPipelineContent() {
             setStagePages(createInitialStagePages());
           }}
         />
+
+        {numberSearchActive && (filteredNumberSearchResults.length > 0 || numberSearchLoading) && (
+          <div
+            data-testid="pipeline-number-search-results"
+            className="rounded-lg border border-gray-200 bg-white"
+          >
+            <div className="border-b border-gray-100 px-4 py-2 text-sm font-medium text-gray-700">
+              Number search results
+            </div>
+            {numberSearchLoading ? (
+              <div className="px-4 py-3 text-sm text-gray-500">Searching numbers...</div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {filteredNumberSearchResults.map((num: ClientNumberDto) => {
+                  const canClaim = !num.currentAssigneeId && num.poolStatus === NumberPoolStatus.AVAILABLE;
+                  return (
+                    <li key={num.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-gray-900">
+                            {num.phoneNumber}
+                          </span>
+                          <span className="truncate text-sm text-gray-600">
+                            {num.clientName || 'Unnamed client'}
+                          </span>
+                          {num.crmStage && (
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {crmStageLabel(num.crmStage)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-xs text-gray-400">
+                          Owner: {num.currentAssignee?.email || 'Unassigned'}
+                        </div>
+                      </div>
+                      {canClaim && (
+                        <Button
+                          size="sm"
+                          onClick={() => claimMutation.mutate(num.id)}
+                          loading={claimMutation.isPending && claimMutation.variables === num.id}
+                          disabled={claimMutation.isPending}
+                        >
+                          Assign to me
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
         {(leadsInitialLoading || usersLoading) && (
           <div data-testid="pipeline-loading" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

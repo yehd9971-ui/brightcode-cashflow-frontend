@@ -135,3 +135,8 @@ export async function searchNumbers(q: string): Promise<ClientNumberDto[]> {
   const response = await api.get<ClientNumberDto[]>('/client-numbers/search', { params: { q } });
   return response.data;
 }
+
+export async function claimNumber(id: string): Promise<ClientNumberDto> {
+  const response = await api.post<ClientNumberDto>(`/client-numbers/${id}/claim`);
+  return response.data;
+}
