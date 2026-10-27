@@ -388,6 +388,9 @@ export default function CallApprovalsPage() {
                           <div className="flex items-center gap-3">
                             <span className="text-lg font-semibold text-gray-900">{call.rawPhoneNumber}</span>
                             <CallStatusBadge status={call.callStatus} size="sm" />
+                          {call.isHistorical && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">Historical / Outside System</span>
+                          )}
                             {call.approvalStatus === 'APPROVED' ? (
                               <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800">Approved</span>
                             ) : (
@@ -527,7 +530,14 @@ export default function CallApprovalsPage() {
                           <div className="flex items-center gap-3">
                             <span className="text-lg font-semibold text-gray-900">{num.phoneNumber}</span>
                             <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">Not Interested</span>
-                            {call && <CallStatusBadge status={call.callStatus} size="sm" />}
+                            {call && (
+                              <>
+                                <CallStatusBadge status={call.callStatus} size="sm" />
+                                {call.isHistorical && (
+                                  <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">Historical / Outside System</span>
+                                )}
+                              </>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
                             <span>by {call?.user?.email || num.enteredBy?.email || 'unknown'}</span>
@@ -652,7 +662,7 @@ export default function CallApprovalsPage() {
 
             <div className="space-y-3">
               {calls.map((call) => (
-                <Card key={call.id} className="p-4 hover:shadow-md transition-shadow">
+                <Card key={call.id} data-testid={`pending-call-${call.id}`} className="p-4 hover:shadow-md transition-shadow">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     {/* Checkbox (ADMIN only) */}
                     {isAdmin && (
@@ -670,6 +680,9 @@ export default function CallApprovalsPage() {
                         <span className="text-lg font-semibold text-gray-900">{call.rawPhoneNumber}</span>
                         <div className="flex items-center gap-2">
                           <CallStatusBadge status={call.callStatus} size="sm" />
+                          {call.isHistorical && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">Historical / Outside System</span>
+                          )}
                           {call.screenshot?.duplicateInstances && call.screenshot.duplicateInstances.length > 0 && (
                             <div
                               className="bg-yellow-100 text-yellow-600 rounded-full p-1 shadow-sm border border-yellow-300 flex items-center justify-center cursor-help"
@@ -686,10 +699,10 @@ export default function CallApprovalsPage() {
                         {call.durationMinutes && <span>Duration: {call.durationMinutes} min</span>}
                         {call.callStartedAt && (() => {
                           const startTime = new Date(call.callStartedAt);
-                          const endTime = new Date(call.createdAt);
+                          const endTime = new Date(call.isHistorical ? call.callEndedAt || call.callStartedAt : call.createdAt);
                           const totalMin = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
-                          const exceeded = call.durationMinutes && Math.abs(totalMin - call.durationMinutes) > 1;
-                          const fmt = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                          const exceeded = !call.isHistorical && call.durationMinutes && Math.abs(totalMin - call.durationMinutes) > 1;
+                          const fmt = (d: Date) => d.toLocaleTimeString('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit' });
                           return (
                             <span className={exceeded ? 'text-red-600 font-semibold' : ''}>
                               Total Time: {totalMin} min ({fmt(startTime)} - {fmt(endTime)})

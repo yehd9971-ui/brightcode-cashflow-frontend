@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { Phone, Upload, X, FileText } from 'lucide-react';
+import { Phone, Upload, X, FileText, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCall, getCalls } from '@/lib/services/calls';
 import { createCallTask } from '@/lib/services/call-tasks';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { FollowUpPrompt } from '@/components/calls/FollowUpPrompt';
+import { HistoricalCallModal } from '@/components/calls/HistoricalCallModal';
 import { validateFile } from '@/types/api';
 
 function apiErrorMessage(error: unknown, fallback: string) {
@@ -36,6 +37,7 @@ export default function LogCallPage() {
   const [notes, setNotes] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [showHistorical, setShowHistorical] = useState(false);
   const [lastCallPhone, setLastCallPhone] = useState('');
 
   const previewUrl = useMemo(() => {
@@ -195,9 +197,14 @@ export default function LogCallPage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Log Call</h1>
-        <p className="text-gray-500">Record a new outbound call</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Log Call</h1>
+          <p className="text-gray-500">Record a new outbound call</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setShowHistorical(true)}>
+          <History className="w-4 h-4 me-1" /> Add Historical Call
+        </Button>
       </div>
 
       <Card className="p-6">
@@ -349,6 +356,7 @@ export default function LogCallPage() {
         clientPhoneNumber={lastCallPhone}
         loading={followUpMutation.isPending}
       />
+      <HistoricalCallModal isOpen={showHistorical} onClose={() => setShowHistorical(false)} />
     </div>
   );
 }

@@ -12,6 +12,9 @@ import {
   BulkApproveCallsDto,
   BulkApproveResponseDto,
   ClientNumberDto,
+  CreateHistoricalCallDto,
+  ActivityTimelineQueryDto,
+  ActivityTimelineResponseDto,
 } from '@/types/api';
 
 export async function getCalls(query?: CallQueryDto): Promise<CallList> {
@@ -42,6 +45,29 @@ export async function createCall(
   }
 
   const response = await api.post<CallResponseDto>('/calls', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+export async function createHistoricalCall(
+  data: CreateHistoricalCallDto,
+  screenshot: File
+): Promise<CallResponseDto> {
+  const formData = new FormData();
+  formData.append('clientPhoneNumber', data.clientPhoneNumber);
+  formData.append('callDate', data.callDate);
+  formData.append('callStartTime', data.callStartTime);
+  formData.append('callStatus', data.callStatus);
+  if (data.durationMinutes !== undefined) {
+    formData.append('durationMinutes', data.durationMinutes.toString());
+  }
+  if (data.notes) {
+    formData.append('notes', data.notes);
+  }
+  formData.append('file', screenshot);
+
+  const response = await api.post<CallResponseDto>('/calls/historical', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
@@ -111,5 +137,14 @@ export async function getNeedsRetry(userId?: string): Promise<CallResponseDto[]>
 
 export async function ensureClientNumberForCall(callId: string): Promise<ClientNumberDto> {
   const response = await api.post<ClientNumberDto>(`/calls/${callId}/ensure-client-number`);
+  return response.data;
+}
+
+export async function getActivityTimeline(
+  query: ActivityTimelineQueryDto
+): Promise<ActivityTimelineResponseDto> {
+  const response = await api.get<ActivityTimelineResponseDto>('/calls/activity-timeline', {
+    params: query,
+  });
   return response.data;
 }

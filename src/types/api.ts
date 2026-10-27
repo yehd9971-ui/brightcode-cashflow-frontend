@@ -621,6 +621,8 @@ export interface CallResponseDto {
   user: CallUserDto;
   approvedBy?: CallUserDto;
   callStartedAt?: string;
+  callEndedAt?: string;
+  isHistorical: boolean;
   lateReportPenalty?: number;
   lateReportDelayMinutes?: number;
   lateReportPenaltyMinutes?: number;
@@ -631,6 +633,15 @@ export interface CallResponseDto {
 
 export interface CreateCallDto {
   clientPhoneNumber: string;
+  callStatus: CallStatus;
+  durationMinutes?: number;
+  notes?: string;
+}
+
+export interface CreateHistoricalCallDto {
+  clientPhoneNumber: string;
+  callDate: string;
+  callStartTime: string;
   callStatus: CallStatus;
   durationMinutes?: number;
   notes?: string;
@@ -909,6 +920,70 @@ export interface EmployeeDailyStatsDto {
 export interface DashboardStatsResponseDto {
   date: string;
   employees: EmployeeDailyStatsDto[];
+}
+
+export interface ActivityTimelineQueryDto {
+  date: string;
+  userId?: string;
+  gapThresholdMinutes?: number;
+}
+
+export interface ActivityCallDto {
+  id: string;
+  clientPhoneNumber: string;
+  callStatus: CallStatus;
+  approvalStatus?: CallApprovalStatus;
+  isHistorical: boolean;
+  isCounted: boolean;
+  isActive: boolean;
+  countsTowardGaps: boolean;
+  hasRecordedStart: boolean;
+  startedAt?: string;
+  endedAt?: string;
+  reportSubmittedAt?: string;
+  durationMinutes?: number;
+  cycleMinutes: number;
+}
+
+export interface ActivityGapDto {
+  startedAt: string;
+  endedAt: string;
+  durationMinutes: number;
+  exceedsThreshold: boolean;
+}
+
+export interface ActivityAttendanceDto {
+  id: string;
+  clockIn: string;
+  clockOut: string;
+}
+
+export interface EmployeeActivitySummaryDto {
+  totalCalls: number;
+  totalTalkMinutes: number;
+  totalCycleMinutes: number;
+  longGapCount: number;
+  totalLongGapMinutes: number;
+  longestGapMinutes: number;
+}
+
+export interface EmployeeActivityTimelineDto {
+  userId: string;
+  email: string;
+  currentStatus?: SalesStatus;
+  attendanceSessions: ActivityAttendanceDto[];
+  calls: ActivityCallDto[];
+  gaps: ActivityGapDto[];
+  summary: EmployeeActivitySummaryDto;
+}
+
+export interface ActivityTimelineResponseDto {
+  date: string;
+  timezone: string;
+  gapThresholdMinutes: number;
+  rangeStart: string;
+  rangeEnd: string;
+  employees: EmployeeActivityTimelineDto[];
 }
 
 export interface DailyCallReportDto {

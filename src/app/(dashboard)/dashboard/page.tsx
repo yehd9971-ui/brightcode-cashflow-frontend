@@ -14,13 +14,15 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { cn } from '@/utils/cn';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { EmployeeActivityTimeline } from '@/components/calls/EmployeeActivityTimeline';
 import { Role } from '@/types/api';
 
 export default function CallDashboardPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
   const [date, setDate] = useState(today);
+  const [activeTab, setActiveTab] = useState<'performance' | 'activity'>('performance');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['calls', 'dashboard-stats', date],
@@ -53,14 +55,38 @@ export default function CallDashboardPage() {
           <p className="text-gray-500">Employee call performance overview</p>
         </div>
         <div className="flex items-center gap-3">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <Button variant="outline" onClick={() => reportMutation.mutate()} loading={reportMutation.isPending}>
-            <FileText className="w-4 h-4 mr-1" /> Generate Report
-          </Button>
+          <Input type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} />
+          {activeTab === 'performance' ? (
+            <Button variant="outline" onClick={() => reportMutation.mutate()} loading={reportMutation.isPending}>
+              <FileText className="w-4 h-4 mr-1" /> Generate Report
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {isError ? (
+      <div className="flex border-b border-gray-200" role="tablist" aria-label="Call dashboard views">
+        {(['performance', 'activity'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === tab
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+            )}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === 'performance' ? 'Performance' : 'Activity Timeline'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'activity' ? (
+        <EmployeeActivityTimeline date={date} />
+      ) : isError ? (
         <ErrorState message="Unable to load data" onRetry={refetch} />
       ) : isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map((i) => <CardSkeleton key={i} />)}</div>

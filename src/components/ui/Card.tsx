@@ -11,6 +11,7 @@ export interface CardProps {
   footer?: ReactNode;
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  'data-testid'?: string;
 }
 
 export function Card({
@@ -21,6 +22,7 @@ export function Card({
   footer,
   className,
   padding = 'md',
+  'data-testid': dataTestId,
 }: CardProps) {
   const paddings = {
     none: '',
@@ -31,6 +33,7 @@ export function Card({
 
   return (
     <div
+      data-testid={dataTestId}
       className={cn(
         'bg-white rounded-lg border border-gray-200 shadow-sm',
         className

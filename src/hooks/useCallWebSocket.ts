@@ -55,6 +55,7 @@ export function useCallWebSocket(options: UseCallWebSocketOptions = {}) {
 
     socket.on('dashboard:updated', () => {
       queryClient.invalidateQueries({ queryKey: ['calls', 'dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['calls', 'activity-timeline'] });
     });
 
     socket.on('call:created', () => {
