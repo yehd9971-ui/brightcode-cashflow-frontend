@@ -64,7 +64,7 @@ export default function LogCallPage() {
   const isSecondAttempt = isPhoneCheckError || (phoneCalls?.data?.length ?? 0) >= 1;
   const phoneCheckPending = callStatus === CallStatus.NOT_ANSWERED && normalizedPhone.length >= 7 && isPhoneCheckLoading;
 
-  // Re-call lock: a NOT_ANSWERED within the last 30 minutes blocks any new call to this number
+  // A second NOT_ANSWERED stays locked for 30 minutes; ANSWERED reports can be submitted immediately
   const [now] = useState(() => Date.now());
   const latestNotAnsweredAt = useMemo(() => {
     return (phoneCalls?.data ?? []).reduce((latest, call) => {
@@ -73,7 +73,7 @@ export default function LogCallPage() {
     }, 0);
   }, [phoneCalls?.data]);
   const recallLockMinutesLeft = Math.ceil((latestNotAnsweredAt + 30 * 60000 - now) / 60000);
-  const isRecallLocked = normalizedPhone.length >= 7 && recallLockMinutesLeft > 0;
+  const isRecallLocked = callStatus === CallStatus.NOT_ANSWERED && normalizedPhone.length >= 7 && recallLockMinutesLeft > 0;
 
   const createMutation = useMutation({
     mutationFn: () => createCall(

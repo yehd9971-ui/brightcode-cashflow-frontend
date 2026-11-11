@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginByRole, loginApiByRole, newContextForRole } from '../helpers/auth-roles';
 import { assertLocalPlaywrightTargets } from '../helpers/local-readiness';
+import { getNeedsRetryApi } from '../helpers/api-client';
 import { API_BASE, uniqueTestPhone } from '../helpers/test-data';
 
 const PHONE_LOG_PNG = Buffer.from(
@@ -113,6 +114,66 @@ test.describe('employee activity and historical calls', () => {
 
     await salesContext.close();
     await adminContext.close();
+  });
+
+  test('allows immediate answered report while preserving the 30-minute retry lock', async ({ browser }) => {
+    assertLocalPlaywrightTargets();
+    const phone = uniqueTestPhone(Date.now() + 2000);
+    const admin = await loginApiByRole('ADMIN');
+    const { context, page } = await newContextForRole(browser, 'ADMIN');
+    const logCallButton = page.getByRole('button', { name: 'Log Call', exact: true });
+
+    await page.goto(`/calls/new?phone=${encodeURIComponent(phone)}`);
+    await page.getByRole('button', { name: 'Not Answered' }).click();
+    await expect(logCallButton).toBeEnabled();
+    await logCallButton.click();
+    await expect(page).toHaveURL(/\/crm\/pipeline/, { timeout: 15_000 });
+
+    const retryCalls = (await getNeedsRetryApi(admin.accessToken, admin.user.id)) as Array<{
+      id: string;
+      clientPhoneNumber: string;
+      createdAt: string;
+      retryAvailableAt: string;
+    }>;
+    const retryCall = retryCalls.find((call) => call.clientPhoneNumber.includes(phone.slice(-8)));
+    expect(retryCall).toBeDefined();
+    expect(new Date(retryCall!.retryAvailableAt).getTime() - new Date(retryCall!.createdAt).getTime()).toBe(30 * 60_000);
+
+    const startResponse = await fetch(`${API_BASE}/users/start-call`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${admin.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone }),
+    });
+    expect(startResponse.status).toBe(400);
+
+    await page.goto(`/calls/new?phone=${encodeURIComponent(phone)}`);
+    await page.locator('input[type="number"]').fill('1');
+    await page.locator('textarea').fill('Immediate answered report after no answer');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'immediate-answered.png',
+      mimeType: 'image/png',
+      buffer: PHONE_LOG_PNG,
+    });
+    await expect(logCallButton).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Not Answered' }).click();
+    await expect(logCallButton).toBeDisabled();
+    await expect(page.getByText(/You can call again in \d+ minutes/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Answered', exact: true }).click();
+    await expect(logCallButton).toBeEnabled();
+    await logCallButton.click();
+    await expect(page.getByText('Call logged successfully')).toBeVisible();
+
+    const retryCallsAfterAnswer = (await getNeedsRetryApi(admin.accessToken, admin.user.id)) as Array<{
+      id: string;
+      clientPhoneNumber: string;
+    }>;
+    expect(retryCallsAfterAnswer.some((call) => call.id === retryCall!.id)).toBe(false);
+    await context.close();
   });
 
   test('sales role cannot access the activity timeline API', async () => {
