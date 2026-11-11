@@ -146,7 +146,9 @@ function CrmPipelineContent() {
   const searchString = searchParams.toString();
   const selectedLeadId = searchParams.get('leadId');
   const phoneSearchDigits = phoneSearch.replace(/\D/g, '');
-  const effectivePhoneSearch = phoneSearchDigits.length >= 5 ? phoneSearch.trim() : undefined;
+  const effectivePhoneSearch = phoneSearchDigits.length >= 5
+    ? phoneSearch.replace(/\p{Cf}/gu, '').trim()
+    : undefined;
   const selectedPriority = priorityValue(priority);
   const operationalUserId = ownerId || undefined;
   const canViewAllEmployees = isAdmin || isSalesManager;
